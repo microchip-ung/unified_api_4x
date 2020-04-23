@@ -1,0 +1,386 @@
+/*
+
+
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
+
+*/
+#ifndef _VTSS_DAYTONA_REG_INIT_PREDICTOR_H
+#define _VTSS_DAYTONA_REG_INIT_PREDICTOR_H
+
+// Settings for mode UNUSED
+
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE_UNUSED                                        VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE(0x1)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_PAF_UNUSED                                              VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_PAF(0x38)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_WAF_UNUSED                                              VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA_UNUSED                                             VTSS_F_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA(0x31a)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB_UNUSED                                          VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB(0x18d)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB_UNUSED                                          VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD_UNUSED                                       VTSS_F_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE_UNUSED                                         VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE(0x1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_PAF_UNUSED                                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_PAF(0x18)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_WAF_UNUSED                                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE_UNUSED                                     VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH_UNUSED                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS_UNUSED                                    VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS(0x1f07)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA_UNUSED                                              VTSS_F_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA(0x31a)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB_UNUSED                                           VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB_UNUSED                                           VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB(0x18d)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD_UNUSED                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD(0x0)
+
+
+// Settings for mode PEE_MW
+
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE_PEE_MW                                        VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE(0x1)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_PAF_PEE_MW                                              VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_PAF(0x8)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_WAF_PEE_MW                                              VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_WAF(0x8)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA_PEE_MW                                             VTSS_F_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA(0x337)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB_PEE_MW                                          VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB(0x19b)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB_PEE_MW                                          VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD_PEE_MW                                       VTSS_F_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE_PEE_MW                                         VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE(0x1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_PAF_PEE_MW                                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_PAF(0x18)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_WAF_PEE_MW                                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_WAF(0x1e)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE_PEE_MW                                     VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE(0x870)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH_PEE_MW                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH(0x50)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS_PEE_MW                                    VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS(0x2026)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA_PEE_MW                                              VTSS_F_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA(0x337)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB_PEE_MW                                           VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB_PEE_MW                                           VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB(0x19b)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD_PEE_MW                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD(0x0)
+
+
+// Settings for mode PEE_W
+
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE_PEE_W                                         VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE(0x1)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_PAF_PEE_W                                               VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_PAF(0x8)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_WAF_PEE_W                                               VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_WAF(0x8)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA_PEE_W                                              VTSS_F_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA(0x337)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB_PEE_W                                           VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB(0x19b)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB_PEE_W                                           VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD_PEE_W                                        VTSS_F_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE_PEE_W                                          VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE(0x1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_PAF_PEE_W                                                VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_PAF(0x18)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_WAF_PEE_W                                                VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_WAF(0x1e)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE_PEE_W                                      VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE(0x870)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH_PEE_W                                         VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH(0x50)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS_PEE_W                                     VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS(0x2026)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA_PEE_W                                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA(0x337)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB_PEE_W                                            VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB_PEE_W                                            VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB(0x19b)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD_PEE_W                                         VTSS_F_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD(0x0)
+
+
+// Settings for mode PEE_MP
+
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE_PEE_MP                                        VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE(0x1)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_PAF_PEE_MP                                              VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_PAF(0x38)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_WAF_PEE_MP                                              VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA_PEE_MP                                             VTSS_F_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA(0x31a)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB_PEE_MP                                          VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB(0x18d)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB_PEE_MP                                          VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD_PEE_MP                                       VTSS_F_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE_PEE_MP                                         VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE(0x1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_PAF_PEE_MP                                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_PAF(0x18)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_WAF_PEE_MP                                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE_PEE_MP                                     VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH_PEE_MP                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS_PEE_MP                                    VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA_PEE_MP                                              VTSS_F_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA(0x31a)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB_PEE_MP                                           VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB_PEE_MP                                           VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB(0x18d)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD_PEE_MP                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD(0x0)
+
+
+// Settings for mode PEE_P
+
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE_PEE_P                                         VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE(0x1)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_PAF_PEE_P                                               VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_PAF(0x38)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_WAF_PEE_P                                               VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA_PEE_P                                              VTSS_F_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA(0x31a)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB_PEE_P                                           VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB(0x18d)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB_PEE_P                                           VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD_PEE_P                                        VTSS_F_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE_PEE_P                                          VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE(0x1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_PAF_PEE_P                                                VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_PAF(0x18)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_WAF_PEE_P                                                VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE_PEE_P                                      VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH_PEE_P                                         VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS_PEE_P                                     VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA_PEE_P                                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA(0x31a)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB_PEE_P                                            VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB_PEE_P                                            VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB(0x18d)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD_PEE_P                                         VTSS_F_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD(0x0)
+
+
+// Settings for mode PEO_MWa
+
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE_PEO_MWa                                       VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE(0x1)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_PAF_PEO_MWa                                             VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_PAF(0x8)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_WAF_PEO_MWa                                             VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_WAF(0x8)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA_PEO_MWa                                            VTSS_F_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA(0x2fc)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB_PEO_MWa                                         VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB(0x17e)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB_PEO_MWa                                         VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD_PEO_MWa                                      VTSS_F_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE_PEO_MWa                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE(0x1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_PAF_PEO_MWa                                              VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_PAF(0x18)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_WAF_PEO_MWa                                              VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_WAF(0x1e)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE_PEO_MWa                                    VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE(0x870)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH_PEO_MWa                                       VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH(0x50)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS_PEO_MWa                                   VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS(0x1de1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA_PEO_MWa                                             VTSS_F_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA(0x2fc)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB_PEO_MWa                                          VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB_PEO_MWa                                          VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB(0x17e)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD_PEO_MWa                                       VTSS_F_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD(0x2)
+
+
+// Settings for mode PEO_Wa
+
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE_PEO_Wa                                        VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE(0x1)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_PAF_PEO_Wa                                              VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_PAF(0x8)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_WAF_PEO_Wa                                              VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_WAF(0x8)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA_PEO_Wa                                             VTSS_F_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA(0x2fc)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB_PEO_Wa                                          VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB(0x17e)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB_PEO_Wa                                          VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD_PEO_Wa                                       VTSS_F_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE_PEO_Wa                                         VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE(0x1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_PAF_PEO_Wa                                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_PAF(0x18)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_WAF_PEO_Wa                                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_WAF(0x1e)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE_PEO_Wa                                     VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE(0x870)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH_PEO_Wa                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH(0x50)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS_PEO_Wa                                    VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS(0x1de1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA_PEO_Wa                                              VTSS_F_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA(0x2fc)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB_PEO_Wa                                           VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB_PEO_Wa                                           VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB(0x17e)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD_PEO_Wa                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD(0x2)
+
+
+// Settings for mode PEO_MWs
+
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE_PEO_MWs                                       VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE(0x1)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_PAF_PEO_MWs                                             VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_PAF(0x8)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_WAF_PEO_MWs                                             VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_WAF(0x8)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA_PEO_MWs                                            VTSS_F_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA(0x2fc)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB_PEO_MWs                                         VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB(0x17e)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB_PEO_MWs                                         VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD_PEO_MWs                                      VTSS_F_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE_PEO_MWs                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE(0x1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_PAF_PEO_MWs                                              VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_PAF(0x18)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_WAF_PEO_MWs                                              VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_WAF(0x1e)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE_PEO_MWs                                    VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE(0x870)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH_PEO_MWs                                       VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH(0x50)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS_PEO_MWs                                   VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS(0x1de1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA_PEO_MWs                                             VTSS_F_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA(0x2fc)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB_PEO_MWs                                          VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB_PEO_MWs                                          VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB(0x17e)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD_PEO_MWs                                       VTSS_F_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD(0x2)
+
+
+// Settings for mode PEO_Ws
+
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE_PEO_Ws                                        VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE(0x1)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_PAF_PEO_Ws                                              VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_PAF(0x8)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_WAF_PEO_Ws                                              VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_WAF(0x8)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA_PEO_Ws                                             VTSS_F_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA(0x2fc)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB_PEO_Ws                                          VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB(0x17e)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB_PEO_Ws                                          VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD_PEO_Ws                                       VTSS_F_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE_PEO_Ws                                         VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE(0x1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_PAF_PEO_Ws                                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_PAF(0x18)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_WAF_PEO_Ws                                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_WAF(0x1e)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE_PEO_Ws                                     VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE(0x870)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH_PEO_Ws                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH(0x50)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS_PEO_Ws                                    VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS(0x1de1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA_PEO_Ws                                              VTSS_F_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA(0x2fc)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB_PEO_Ws                                           VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB_PEO_Ws                                           VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB(0x17e)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD_PEO_Ws                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD(0x2)
+
+
+// Settings for mode PEO_MP2e_20
+
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE_PEO_MP2e_20                                   VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE(0x1)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_PAF_PEO_MP2e_20                                         VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_PAF(0x38)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_WAF_PEO_MP2e_20                                         VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA_PEO_MP2e_20                                        VTSS_F_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA(0x2e2)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB_PEO_MP2e_20                                     VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB(0x171)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB_PEO_MP2e_20                                     VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD_PEO_MP2e_20                                  VTSS_F_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE_PEO_MP2e_20                                    VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE(0x1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_PAF_PEO_MP2e_20                                          VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_PAF(0x18)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_WAF_PEO_MP2e_20                                          VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE_PEO_MP2e_20                                VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH_PEO_MP2e_20                                   VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS_PEO_MP2e_20                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA_PEO_MP2e_20                                         VTSS_F_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA(0x2e2)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB_PEO_MP2e_20                                      VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB_PEO_MP2e_20                                      VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB(0x171)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD_PEO_MP2e_20                                   VTSS_F_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD(0x2)
+
+
+// Settings for mode PEO_P2e_20
+
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE_PEO_P2e_20                                    VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE(0x1)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_PAF_PEO_P2e_20                                          VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_PAF(0x38)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_WAF_PEO_P2e_20                                          VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA_PEO_P2e_20                                         VTSS_F_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA(0x2e2)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB_PEO_P2e_20                                      VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB(0x171)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB_PEO_P2e_20                                      VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD_PEO_P2e_20                                   VTSS_F_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE_PEO_P2e_20                                     VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE(0x1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_PAF_PEO_P2e_20                                           VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_PAF(0x18)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_WAF_PEO_P2e_20                                           VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE_PEO_P2e_20                                 VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH_PEO_P2e_20                                    VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS_PEO_P2e_20                                VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA_PEO_P2e_20                                          VTSS_F_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA(0x2e2)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB_PEO_P2e_20                                       VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB_PEO_P2e_20                                       VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB(0x171)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD_PEO_P2e_20                                    VTSS_F_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD(0x2)
+
+
+// Settings for mode PEO_P2e_100
+
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE_PEO_P2e_100                                   VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE(0x1)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_PAF_PEO_P2e_100                                         VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_PAF(0x38)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_WAF_PEO_P2e_100                                         VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA_PEO_P2e_100                                        VTSS_F_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA(0x2e5)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB_PEO_P2e_100                                     VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB(0x172)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB_PEO_P2e_100                                     VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD_PEO_P2e_100                                  VTSS_F_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE_PEO_P2e_100                                    VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE(0x1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_PAF_PEO_P2e_100                                          VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_PAF(0x18)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_WAF_PEO_P2e_100                                          VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE_PEO_P2e_100                                VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH_PEO_P2e_100                                   VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS_PEO_P2e_100                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA_PEO_P2e_100                                         VTSS_F_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA(0x2e5)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB_PEO_P2e_100                                      VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB_PEO_P2e_100                                      VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB(0x172)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD_PEO_P2e_100                                   VTSS_F_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD(0x2)
+
+
+// Settings for mode PEO_P1e_100
+
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE_PEO_P1e_100                                   VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE(0x1)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_PAF_PEO_P1e_100                                         VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_PAF(0x38)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_WAF_PEO_P1e_100                                         VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA_PEO_P1e_100                                        VTSS_F_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA(0x2e2)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB_PEO_P1e_100                                     VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB(0x171)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB_PEO_P1e_100                                     VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD_PEO_P1e_100                                  VTSS_F_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE_PEO_P1e_100                                    VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE(0x1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_PAF_PEO_P1e_100                                          VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_PAF(0x18)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_WAF_PEO_P1e_100                                          VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE_PEO_P1e_100                                VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH_PEO_P1e_100                                   VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS_PEO_P1e_100                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA_PEO_P1e_100                                         VTSS_F_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA(0x2e2)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB_PEO_P1e_100                                      VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB_PEO_P1e_100                                      VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB(0x171)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD_PEO_P1e_100                                   VTSS_F_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD(0x1)
+
+
+// Settings for mode TEO_PMP2e
+
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE_TEO_PMP2e                                     VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE(0x1)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_PAF_TEO_PMP2e                                           VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_PAF(0x38)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_WAF_TEO_PMP2e                                           VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA_TEO_PMP2e                                          VTSS_F_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA(0x2e2)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB_TEO_PMP2e                                       VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB(0x171)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB_TEO_PMP2e                                       VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD_TEO_PMP2e                                    VTSS_F_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE_TEO_PMP2e                                      VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE(0x1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_PAF_TEO_PMP2e                                            VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_PAF(0x18)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_WAF_TEO_PMP2e                                            VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE_TEO_PMP2e                                  VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH_TEO_PMP2e                                     VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS_TEO_PMP2e                                 VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA_TEO_PMP2e                                           VTSS_F_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA(0x2e2)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB_TEO_PMP2e                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB_TEO_PMP2e                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB(0x171)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD_TEO_PMP2e                                     VTSS_F_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD(0x2)
+
+
+// Settings for mode TEO_PMP1e
+
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE_TEO_PMP1e                                     VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE(0x1)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_PAF_TEO_PMP1e                                           VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_PAF(0x38)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_WAF_TEO_PMP1e                                           VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA_TEO_PMP1e                                          VTSS_F_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA(0x2e2)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB_TEO_PMP1e                                       VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB(0x171)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB_TEO_PMP1e                                       VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD_TEO_PMP1e                                    VTSS_F_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE_TEO_PMP1e                                      VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE(0x1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_PAF_TEO_PMP1e                                            VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_PAF(0x18)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_WAF_TEO_PMP1e                                            VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE_TEO_PMP1e                                  VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH_TEO_PMP1e                                     VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS_TEO_PMP1e                                 VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA_TEO_PMP1e                                           VTSS_F_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA(0x2e2)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB_TEO_PMP1e                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB_TEO_PMP1e                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB(0x171)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD_TEO_PMP1e                                     VTSS_F_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD(0x1)
+
+
+// Settings for mode TEE_PP
+
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE_TEE_PP                                        VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_IG_ENABLE(0x1)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_PAF_TEE_PP                                              VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_PAF(0x38)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_CFG_WAF_TEE_PP                                              VTSS_F_IP_1588_INGR_PREDICTOR_IG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA_TEE_PP                                             VTSS_F_IP_1588_INGR_PREDICTOR_IG_PMA_TPMA(0x31a)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB_TEE_PP                                          VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_LSB(0x18d)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB_TEE_PP                                          VTSS_F_IP_1588_INGR_PREDICTOR_IG_XFI_XFI_MSB(0x0)
+#define  VTSS_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD_TEE_PP                                       VTSS_F_IP_1588_INGR_PREDICTOR_IG_OTN_GAP_PERIOD(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE_TEE_PP                                         VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_EG_ENABLE(0x1)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_PAF_TEE_PP                                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_PAF(0x18)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_CFG_WAF_TEE_PP                                               VTSS_F_IP_1588_EGR_PREDICTOR_EG_CFG_WAF(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE_TEE_PP                                     VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_FSIZE(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH_TEE_PP                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_FRAME_W_OH(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS_TEE_PP                                    VTSS_F_IP_1588_EGR_PREDICTOR_EG_WIS_DELAYS_W_OH_NS(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA_TEE_PP                                              VTSS_F_IP_1588_EGR_PREDICTOR_EG_PMA_TPMA(0x31a)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB_TEE_PP                                           VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_LSB(0x0)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB_TEE_PP                                           VTSS_F_IP_1588_EGR_PREDICTOR_EG_XFI_XFI_MSB(0x18d)
+#define  VTSS_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD_TEE_PP                                        VTSS_F_IP_1588_EGR_PREDICTOR_EG_OTN_GAP_PERIOD(0x0)
+
+
+
+
+typedef enum {
+    BM_PREDICTOR_UNUSED,
+    BM_PREDICTOR_PEE_MW,
+    BM_PREDICTOR_PEE_W,
+    BM_PREDICTOR_PEE_MP,
+    BM_PREDICTOR_PEE_P,
+    BM_PREDICTOR_PEO_MWA,
+    BM_PREDICTOR_PEO_WA,
+    BM_PREDICTOR_PEO_MWS,
+    BM_PREDICTOR_PEO_WS,
+    BM_PREDICTOR_PEO_MP2E_20,
+    BM_PREDICTOR_PEO_P2E_20,
+    BM_PREDICTOR_PEO_P2E_100,
+    BM_PREDICTOR_PEO_P1E_100,
+    BM_PREDICTOR_TEO_PMP2E,
+    BM_PREDICTOR_TEO_PMP1E,
+    BM_PREDICTOR_TEE_PP,
+    BM_PREDICTOR_LAST
+} block_predictor_mode_t;
+
+#endif /* _VTSS_DAYTONA_REG_INIT_PREDICTOR_H */
