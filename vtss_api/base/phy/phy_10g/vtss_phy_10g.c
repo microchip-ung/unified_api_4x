@@ -1,28 +1,26 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
- 
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
+
 
 */
 
@@ -398,6 +396,13 @@ static vtss_rc vtss_phy_10g_status_get_private(vtss_state_t *vtss_state,
                         status->pcs.rx_link ? "UP" : "DOWN",
                         status->hpcs.rx_link ? "UP" : "DOWN",
                         status->wis.rx_link? "UP" : "Down");
+                /* WAN Mode: MAC FC Buffer Rx ENA reset workaround */
+                if (status->status &&
+                    (status->pma.link_down || status->wis.link_down ||
+                     status->pcs.link_down || status->hpma.link_down ||
+                     status->hpcs.link_down)) {
+                    VTSS_RC(phy_mac_fc_buffer_reset(vtss_state, port_no));
+                }
                 break;
             case VTSS_PHY_1G_MODE:
                  VTSS_N("port %u Line PMA %s, Host PMA %s, line PCS %s , Host PCS %s, Line 1G PCS %s Host 1G PCS %s",port_no,
@@ -442,6 +447,12 @@ static vtss_rc vtss_phy_10g_status_get_private(vtss_state_t *vtss_state,
                         status->pcs.rx_link ? "UP" : "DOWN",
                         status->xs.rx_link ? "UP" : "DOWN",
                         status->wis.rx_link ? "UP" : "DOWN");
+                /* WAN Mode: MAC FC Buffer Rx ENA reset workaround */
+                if (status->status &&
+                    (status->pma.link_down || status->wis.link_down ||
+                     status->pcs.link_down || status->xs.link_down)) {
+                    VTSS_RC(phy_mac_fc_buffer_reset(vtss_state, port_no));
+                }
                 break;
             case VTSS_PHY_1G_MODE:
                 //status->status = (status->pma.rx_link && status->pcs.rx_link && status->xs.rx_link && status->lpcs_1g && status->hpcs_1g) ? TRUE : FALSE;
@@ -475,7 +486,6 @@ static vtss_rc vtss_phy_10g_identify_private(vtss_state_t *vtss_state,
 {
     u16                   model=0, rev=0, device_feature_status = 0, efuse = 0,value = 0;
     BOOL identified=FALSE,is_1_channel_8489=FALSE;
-    vtss_port_no_t base_port_no = vtss_state->phy_10g_api_base_no;
 
     if (vtss_state->phy_10g_state[port_no].channel_id_lock) {
         return VTSS_RC_OK;     /* The Phy is already identified */
@@ -497,23 +507,6 @@ static vtss_rc vtss_phy_10g_identify_private(vtss_state_t *vtss_state,
                 device_feature_status = (u16) spi_val;
                 VTSS_RC(vtss_state->init_conf.spi_32bit_read_write(vtss_state, port_no, TRUE, MMD_GLOBAL, EFUSE_Q347_Q32, &spi_val));
                 is_1_channel_8489= spi_val && VTSS_BIT(0) ? TRUE : FALSE;
-            } else {
-                if (vtss_state->phy_10g_api_base_no != VTSS_PORT_NO_NONE) {
-                    VTSS_RC(vtss_state->init_conf.spi_32bit_read_write(vtss_state, base_port_no, TRUE, MMD_GLOBAL, 0, &spi_val));
-                    model = (u16) spi_val;
-                    if (model == 0x8484 || model == 0x8487 || model == 0x8488 || model == 0x8489 || model == 0x8490 || model == 0x8491
-                            || model == 0x8256 || model == 0x8257 || model == 0x8258 || model == 0x8254) {
-                        identified = TRUE;
-                        VTSS_RC(vtss_state->init_conf.spi_32bit_read_write(vtss_state, base_port_no, TRUE, MMD_GLOBAL, 1, &spi_val));
-                        rev = (u16) spi_val;
-                        VTSS_RC(vtss_state->init_conf.spi_32bit_read_write(vtss_state, base_port_no, TRUE, MMD_GLOBAL, VENICE_REG_EFUSE, &spi_val));
-                        efuse = (u16) spi_val;
-                        VTSS_RC(vtss_state->init_conf.spi_32bit_read_write(vtss_state, base_port_no, TRUE, MMD_GLOBAL, VENICE_REG_FEATURE_STATE, &spi_val));
-                        device_feature_status = (u16) spi_val;
-                        VTSS_RC(vtss_state->init_conf.spi_32bit_read_write(vtss_state, base_port_no, TRUE, MMD_GLOBAL, EFUSE_Q347_Q32, &spi_val));
-                        is_1_channel_8489= spi_val && VTSS_BIT(0) ? TRUE : FALSE;
-                    }
-                }
             }
         } else if (vtss_state->init_conf.spi_read_write != NULL){
             VTSS_RC(vtss_phy_10g_spi_read_write(vtss_state, port_no, TRUE, MMD_GLOBAL, 0, &spi_val));
@@ -529,24 +522,6 @@ static vtss_rc vtss_phy_10g_identify_private(vtss_state_t *vtss_state,
                 device_feature_status = (u16) spi_val;
                 VTSS_RC(vtss_phy_10g_spi_read_write(vtss_state, port_no, TRUE, MMD_GLOBAL, EFUSE_Q347_Q32, &spi_val));
                 is_1_channel_8489 = spi_val && VTSS_BIT(0) ? TRUE : FALSE;
-            } else {
-                if (vtss_state->phy_10g_api_base_no != VTSS_PORT_NO_NONE) {
-                    VTSS_RC(vtss_phy_10g_spi_read_write(vtss_state, base_port_no, TRUE, MMD_GLOBAL, 0, &spi_val));
-                    model = (u16) spi_val;
-                    if (model == 0x8484 || model == 0x8487 || model == 0x8488 || model == 0x8489 || model == 0x8490 || model == 0x8491
-                            || model == 0x8256 || model == 0x8257 || model == 0x8258 || model == 0x8254) {
-                        identified = TRUE;
-                        VTSS_RC(vtss_phy_10g_spi_read_write(vtss_state, base_port_no, TRUE, MMD_GLOBAL, 1, &spi_val));
-                        rev = (u16) spi_val;
-                        VTSS_RC(vtss_phy_10g_spi_read_write(vtss_state, base_port_no, TRUE, MMD_GLOBAL, VENICE_REG_EFUSE, &spi_val));
-                        efuse = (u16) spi_val;
-                        VTSS_RC(vtss_phy_10g_spi_read_write(vtss_state, base_port_no, TRUE, MMD_GLOBAL, VENICE_REG_FEATURE_STATE, &spi_val));
-                        device_feature_status = (u16) spi_val;
-                        VTSS_RC(vtss_phy_10g_spi_read_write(vtss_state, base_port_no, TRUE, MMD_GLOBAL, EFUSE_Q347_Q32, &spi_val));
-                        is_1_channel_8489 = spi_val && VTSS_BIT(0) ? TRUE : FALSE;
-                    }
-
-                }
             }
         }
     }
@@ -592,59 +567,59 @@ static vtss_rc vtss_phy_10g_identify_private(vtss_state_t *vtss_state,
     device_feature_status |= (0x01 & (efuse>>2)); /* bit 0 is read from efuse bit 2 */
 
     switch (model) {
-    case 0x8486:
-        vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8486;
-        vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_XAUI_XGMII_XFI; 
-        break;
-    case 0x8484:
-        vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8484;
-        vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_XAUI_XFI;
-        break;
-    case 0x8487:
-        vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8487;
-        vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_XAUI_XFI;
-        break;
-    case 0x8488:
-        vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8488;
-        vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_XAUI_XFI;
-        break;
-    case 0x8489:
-        if (is_1_channel_8489 == TRUE) {
-            vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8489_15;
-        } else {
-            vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8489;
-        }
-        vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_VENICE;
-        break;
-    case 0x8490:
-        vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8490;
-        vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_VENICE;
-        break;
-    case 0x8491:
-        vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8491;
-        vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_VENICE;
-        break;
-    case 0x8256:
-        vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8256;
-        vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_MALIBU;
-        break;
-    case 0x8257:
-        vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8257;
-        vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_MALIBU;
-        break;
-    case 0x8258:
-        vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8258;
-        vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_MALIBU;
-        break;
-    case 0x8254:
-        vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8254;
-        vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_MALIBU;
-        break;
-    default:
-        vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_10G_NONE;
-        vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_10G_NONE;
-        VTSS_E("Not a Vitesse phy: model:%u",model);
-        return VTSS_RC_ERROR;
+        case 0x8486:
+            vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8486;
+            vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_XAUI_XGMII_XFI; 
+            break;
+        case 0x8484:
+            vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8484;
+            vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_XAUI_XFI;
+            break;
+        case 0x8487:
+            vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8487;
+            vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_XAUI_XFI;
+            break;
+        case 0x8488:
+            vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8488;
+            vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_XAUI_XFI;
+            break;
+        case 0x8489:
+            if (is_1_channel_8489 == TRUE) {
+                vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8489_15;
+            } else {
+                vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8489;
+            }
+            vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_VENICE;
+            break;
+        case 0x8490:
+            vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8490;
+            vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_VENICE;
+            break;
+        case 0x8491:
+            vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8491;
+            vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_VENICE;
+            break;
+        case 0x8256:
+            vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8256;
+            vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_MALIBU;
+            break;
+        case 0x8257:
+            vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8257;
+            vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_MALIBU;
+            break;
+        case 0x8258:
+            vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8258;
+            vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_MALIBU;
+            break;
+        case 0x8254:
+            vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_8254;
+            vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_MALIBU;
+            break;
+        default:
+            vtss_state->phy_10g_state[port_no].type = VTSS_PHY_TYPE_10G_NONE;
+            vtss_state->phy_10g_state[port_no].family = VTSS_PHY_FAMILY_10G_NONE;
+            VTSS_E("Not a Vitesse phy: model:%u",model);
+            return VTSS_RC_ERROR;
     }
     VTSS_D("port %d, device_feature_status %x",port_no, device_feature_status);
     vtss_state->phy_10g_state[port_no].device_feature_status = device_feature_status;
@@ -736,10 +711,10 @@ static vtss_rc vtss_phy_10g_failover_set_private(vtss_state_t *vtss_state,
         return VTSS_RC_ERROR;
     }        
     
-    VTSS_RC(VTSS_PHY_WARM_WR(port_no, MMD_GLOBAL, 0x3, value));
-
     if (vtss_state->phy_10g_state[port_no].family == VTSS_PHY_FAMILY_VENICE) {
-        VTSS_RC(phy_10g_venice_block_level_resets(vtss_state, port_no));
+        VTSS_RC(VTSS_FUNC_COLD(cil.venice_cross_connect, port_no, value));
+    } else {
+        VTSS_RC(VTSS_PHY_WARM_WR(port_no, MMD_GLOBAL, 0x3, value));
     }
 
     VTSS_D("Exit");
@@ -968,13 +943,12 @@ static vtss_rc vtss_phy_10g_set_channel(vtss_state_t *vtss_state, const vtss_por
 
 {
     vtss_phy_10g_mode_t *mode; 
-
     VTSS_D("Enter");
     if (vtss_state->phy_10g_state[port_no].channel_id_lock) {
         return VTSS_RC_OK; /* Channel id is set  */
     }
     mode = &vtss_state->phy_10g_state[port_no].mode;
-    if (mode->channel_id == VTSS_CHANNEL_AUTO) {        
+    if (mode->channel_id == VTSS_CHANNEL_AUTO) {
         if (vtss_state->phy_10g_state[port_no].type == VTSS_PHY_TYPE_8486) { 
             vtss_state->phy_channel_id = 0;  /* only one channel in this phy */
         } else if (vtss_state->phy_10g_state[port_no].type == VTSS_PHY_TYPE_8484) {
@@ -1072,18 +1046,17 @@ static vtss_rc vtss_phy_10g_set_channel(vtss_state_t *vtss_state, const vtss_por
         }
     }
 
-    if (vtss_state->phy_10g_state[port_no].channel_id == 0) {
-        vtss_state->phy_10g_api_base_no = port_no;
-    } else {
-        if (vtss_state->phy_10g_api_base_no == VTSS_PORT_NO_NONE) {
-            VTSS_E("Please start with initilizing channel 0, i.e. the Phy with the lowest MDIO number");
-            return VTSS_RC_ERROR;
-        }
+    //In Case of WarmStart the PLL5G should not be initialized.
+    if (vtss_state->warm_start_cur) {
+        vtss_state->phy_10g_state[port_no].mode.is_init = FALSE;
     }
 
+    if (vtss_state->phy_10g_state[port_no].channel_id == 0) {
+        vtss_state->phy_10g_api_base_no = port_no;
+    }
     vtss_state->phy_10g_state[port_no].phy_api_base_no = vtss_state->phy_10g_api_base_no;
 
-    if ((vtss_state->phy_channel_id == 0) && (vtss_state->phy_10g_state[port_no].channel_id > 0)) {
+    if ((mode->channel_id == VTSS_CHANNEL_AUTO) &&  (vtss_state->phy_channel_id == 0) && (vtss_state->phy_10g_state[port_no].channel_id > 0)) {
         vtss_state->phy_10g_api_base_no = VTSS_PORT_NO_NONE;
     }
     VTSS_D("Exit");
@@ -2322,6 +2295,10 @@ static vtss_rc vtss_phy_10g_mode_set_init (vtss_state_t *vtss_state,
     /* Register the channel id       */
     VTSS_RC(vtss_phy_10g_set_channel(vtss_state, port_no));
 
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+    VTSS_RC_COLD(vtss_phy_ts_bypass_set(vtss_state, port_no, TRUE, FALSE));
+#endif
+
     VTSS_I("Venice work around: %d",mode->venice_rev_a_los_detection_workaround);
 #if defined(VTSS_FEATURE_SYNCE_10G)
     if ((vtss_state->phy_10g_state[port_no].type == VTSS_PHY_TYPE_8484) || 
@@ -2430,6 +2407,29 @@ static vtss_rc vtss_phy_10g_init_private (vtss_state_t *vtss_state,
     
     return rc;
 }
+static vtss_rc vtss_phy_10g_auto_failover_set_priv(vtss_state_t  *vtss_state,
+                                              const vtss_phy_10g_auto_failover_conf_t  *mode)
+{
+    VTSS_RC(VTSS_FUNC_COLD(cil.malibu_phy_10g_auto_failover_set,mode));
+    return VTSS_RC_OK;
+}
+
+static vtss_rc vtss_phy_10g_apc_restart_private (vtss_state_t *vtss_state,
+                                                 const vtss_port_no_t port_no,
+                                                 const BOOL is_host)
+{
+    vtss_rc rc = VTSS_RC_OK;
+    if (vtss_state->phy_10g_state[port_no].family == VTSS_PHY_FAMILY_MALIBU) {
+        VTSS_RC(VTSS_FUNC_COLD(cil.malibu_phy_10g_apc_restart, port_no, is_host));
+    } else if (vtss_state->phy_10g_state[port_no].family == VTSS_PHY_FAMILY_VENICE) {
+        VTSS_RC(VTSS_FUNC_COLD(cil.venice_phy_10g_apc_restart, port_no, is_host));
+    } else {
+        VTSS_E("Operation not supported on this device, port %u \n",port_no);
+        return VTSS_RC_ERROR;
+    }
+
+    return rc;
+}
 /* ================================================================= *
  *  Private functions - End
  * ================================================================= */
@@ -2453,16 +2453,18 @@ vtss_rc vtss_phy_10g_mode_get (const vtss_inst_t inst,
 }
 
 vtss_rc vtss_phy_10g_init(const vtss_inst_t inst, 
-                           const vtss_port_no_t port_no)
+                          const vtss_port_no_t port_no,
+                          const vtss_phy_10g_init_parm_t *const init_conf)
 {
     vtss_state_t *vtss_state;
     vtss_rc      rc;
-
     VTSS_ENTER();
     if ((rc = vtss_inst_port_no_check(inst, &vtss_state, port_no)) == VTSS_RC_OK) {
+        vtss_state->phy_10g_state[port_no].mode.channel_id = init_conf->channel_conf;
         if((rc = vtss_phy_10g_init_private(vtss_state, port_no)) != VTSS_RC_OK) {
             VTSS_E("vtss_phy_10g_init_private failed on port %u ",port_no);
         }
+
     }
     VTSS_EXIT();
     return rc;
@@ -2478,17 +2480,13 @@ vtss_rc vtss_phy_10g_mode_set (const vtss_inst_t inst,
     VTSS_ENTER();
     if ((rc = vtss_inst_port_no_check(inst, &vtss_state, port_no)) == VTSS_RC_OK) {
 
-#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
-        rc = VTSS_RC_COLD(vtss_phy_ts_bypass_set(vtss_state, port_no, TRUE, FALSE));
-        if (rc == VTSS_RC_OK){
-#endif
+        rc = vtss_phy_10g_mode_set_init(vtss_state, port_no, mode);
 
-            rc = vtss_phy_10g_mode_set_init(vtss_state, port_no, mode);
-
+        if(rc == VTSS_RC_OK) {
 #if defined(VTSS_FEATURE_PHY_TIMESTAMP)
             rc = VTSS_RC_COLD(vtss_phy_ts_bypass_set(vtss_state, port_no, FALSE, FALSE));
-        }
 #endif
+        }
 
     }
     VTSS_EXIT();
@@ -2620,6 +2618,22 @@ vtss_rc vtss_phy_10g_apc_status_get (const vtss_inst_t inst,
     VTSS_EXIT();
     return rc;
 }
+
+vtss_rc vtss_phy_10g_apc_restart (const vtss_inst_t inst,
+                                  const vtss_port_no_t port_no,
+                                  const BOOL is_host)
+{
+    vtss_state_t *vtss_state;
+    vtss_rc      rc = VTSS_RC_ERROR;
+
+    VTSS_ENTER();
+    if ((rc = vtss_inst_phy_10G_no_check_private(inst, &vtss_state, port_no)) == VTSS_RC_OK) {
+        VTSS_RC_COLD(vtss_phy_10g_apc_restart_private(vtss_state,port_no,is_host));
+    }
+    VTSS_EXIT();
+    return rc;
+}
+
 vtss_rc vtss_phy_10g_jitter_conf_set (const vtss_inst_t inst,
                                       const vtss_port_no_t port_no,
                                       const vtss_phy_10g_jitter_conf_t *const jitter_conf,
@@ -4473,6 +4487,22 @@ vtss_rc vtss_phy_10g_edc_fw_status_get(const vtss_inst_t     inst,
     VTSS_EXIT();
     return rc;
 }
+
+vtss_rc vtss_phy_10g_fc_buffer_reset(const vtss_inst_t inst,
+                                     const vtss_port_no_t  port_no)
+{
+    vtss_state_t *vtss_state;
+    vtss_rc      rc = VTSS_RC_OK;
+
+    VTSS_ENTER();
+    if ((rc = vtss_inst_port_no_check(inst, &vtss_state, port_no)) == VTSS_RC_OK) {
+        rc =  VTSS_RC_COLD(phy_mac_fc_buffer_reset(vtss_state, port_no));
+    }
+    VTSS_EXIT();
+
+    return rc;
+}
+
 /* - Warm start synchronization ------------------------------------ */
 #define VTSS_SYNC_RC(expr) { vtss_rc __rc__ = (expr); if (__rc__ < VTSS_RC_OK) {vtss_state->sync_calling_private = FALSE; return __rc__; }}
 extern vtss_rc vtss_phy_ts_sync(vtss_state_t *vtss_state, const vtss_port_no_t port_no);
@@ -4582,13 +4612,19 @@ vtss_rc vtss_phy_10g_auto_failover_set(const vtss_inst_t      inst,
     port_no = mode->port_no;
     VTSS_ENTER();
     if ((rc = vtss_inst_phy_10G_no_check_private(inst, &vtss_state, port_no)) == VTSS_RC_OK) {
-        if (vtss_state->phy_10g_state[port_no].type == VTSS_PHY_TYPE_8256 ||
-                vtss_state->phy_10g_state[port_no].type == VTSS_PHY_TYPE_8257 ||
-                vtss_state->phy_10g_state[port_no].type == VTSS_PHY_TYPE_8258 ||
-                vtss_state->phy_10g_state[port_no].type == VTSS_PHY_TYPE_8254) {
-            rc = VTSS_FUNC_COLD(cil.malibu_phy_10g_auto_failover_set, port_no,mode);
+        if (vtss_state->phy_10g_state[port_no].family == VTSS_PHY_FAMILY_MALIBU) {
+            if((rc = VTSS_RC_COLD(vtss_phy_10g_auto_failover_set_priv(vtss_state,mode))) == VTSS_RC_OK) {
+                if (mode->is_host_side == FALSE) {
+                    vtss_state->phy_10g_state[port_no].l_a_failover = *mode; 
+                } else {
+                    vtss_state->phy_10g_state[port_no].h_a_failover = *mode; 
+                }
+            } else {
+                VTSS_E("vtss_phy_10g_auto_failover_set failed on port %u",port_no);
+                rc = VTSS_RC_ERROR;
+            }
         } else {
-            VTSS_E("Auto Failover is not currently supported for %d",vtss_state->phy_10g_state[port_no].type);
+            VTSS_E("Auto Failover is not currently supported on port %u",port_no);
             rc = VTSS_RC_ERROR;
         }
     }
@@ -4603,7 +4639,15 @@ vtss_rc vtss_phy_10g_auto_failover_get(const vtss_inst_t      inst,
     vtss_state_t *vtss_state;
     VTSS_ENTER();
     if ((rc = vtss_inst_port_no_check(inst, &vtss_state, mode->port_no)) == VTSS_RC_OK) {
-        *mode = vtss_state->phy_10g_state[base_port(vtss_state, mode->port_no)].a_failover; 
+       if(vtss_state->phy_10g_state[mode->port_no].family == VTSS_PHY_FAMILY_MALIBU) {
+            if (mode->is_host_side == FALSE) {
+                *mode = vtss_state->phy_10g_state[mode->port_no].l_a_failover;
+            } else {
+                *mode = vtss_state->phy_10g_state[mode->port_no].h_a_failover;
+            }
+        } else {
+            VTSS_E("Invalid operation on this port %u \n",mode->port_no);
+        } 
     }
     VTSS_EXIT();
     return rc;
@@ -4850,8 +4894,8 @@ vtss_rc vtss_phy_10g_oos_8488_reset_priv(vtss_state_t *vtss_state,
     pr("Time After Waiting for 100msec: Sec %ld, Usec  %ld\n", tv.tv_sec, tv.tv_usec);
 #endif
 
-    /*Step -6 Perform a Rx PCS reset – this will reset both Rx PCS and 1588 only, not the whole channel.*/
-    pr("Step -6 Perform a Rx and tx PCS reset – this will reset both Rx PCS and 1588 only, not the whole channel.\n");
+    /*Step -6 Perform a Rx PCS reset this will reset both Rx PCS and 1588 only, not the whole channel.*/
+    pr("Step -6 Perform a Rx and tx PCS reset this will reset both Rx PCS and 1588 only, not the whole channel.\n");
 #ifdef VTSS_FIFO_SYNC_DEBUG
     pr("------------------Register Dump Start-------------\n");
     VTSS_RC(vtss_phy_10g_8488_oos_pcs_reg_dump(vtss_state, port_no, pr));
@@ -4877,7 +4921,7 @@ vtss_rc vtss_phy_10g_oos_8488_reset_priv(vtss_state_t *vtss_state,
     pr("Step 11- Wait for 5ms \n");
     VTSS_MSLEEP(5);
 
-    /*Step 12 Release XFI Rx squelch – this will allow the receive path to begin the block lock and link up process.*/
+    /*Step 12 Release XFI Rx squelch this will allow the receive path to begin the block lock and link up process.*/
     pr("Step 12 Release XFI Rx squelch\n");
     VTSS_RC(vtss_mmd_rd(vtss_state,  port_no, MMD_PMA, 0x8004, &value));
     value &= ~0x8;
@@ -4890,7 +4934,7 @@ vtss_rc vtss_phy_10g_oos_8488_reset_priv(vtss_state_t *vtss_state,
     VTSS_RC(vtss_phy_10g_8488_oos_pcs_reg_dump(vtss_state, port_no, pr));
 #endif
 
-    /* Step 13 Release XFI Tx squelch – this will allow the transmit path to begin sending blocks/frames to begin the link up process. */
+    /* Step 13 Release XFI Tx squelch this will allow the transmit path to begin sending blocks/frames to begin the link up process. */
     pr("Step 13- Release XFI Tx squelch\n");
     VTSS_RC(vtss_mmd_rd(vtss_state,  port_no, MMD_PMA, 0x8012, &value));
     value &= ~0x2;

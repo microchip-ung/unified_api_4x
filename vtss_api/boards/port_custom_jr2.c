@@ -1,27 +1,25 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
 */
 // Avoid "*.h not used in module port_custom_jr2.c"
@@ -1883,7 +1881,7 @@ BOOL vtss_board_probe_jr2_sfp24(vtss_board_t *board, vtss_board_info_t *board_in
     detect.miim_found[0] = 0;
     detect.miim_found[1] = 0;
 
-    if (board_info->port_cfg == VTSS_BOARD_CONF_20x1G_4x2G5_2xSFI_NPI) {
+    if (board_info->port_cfg == VTSS_BOARD_CONF_20x1G_4x2G5_2xSFI_NPI ) {
         for (port_no = 0; port_no < VTSS_PORTS; port_no++) {
             entry = &jr2_port_table[port_no];
             board_info->port_count = 27;
@@ -1919,7 +1917,7 @@ BOOL vtss_board_probe_jr2_sfp24(vtss_board_t *board, vtss_board_info_t *board_in
             }
         }
  
-    } else if (board_info->port_cfg == VTSS_BOARD_CONF_20x1G_4x2G5_4xSFI_NPI) {
+    } else if (board_info->port_cfg == VTSS_BOARD_CONF_20x1G_4x2G5_4xSFI_NPI || board_info->port_cfg == VTSS_BOARD_CONF_DEFAULT_VENICE_1G_MODE) {
         for (port_no = 0; port_no < VTSS_PORTS; port_no++) {
             entry = &jr2_port_table[port_no];
             board_info->port_count = 29;
@@ -1944,13 +1942,22 @@ BOOL vtss_board_probe_jr2_sfp24(vtss_board_t *board, vtss_board_info_t *board_in
                 detect.port_no = port_no;
                 detect.miim_addr[0] = (port_no == 24) ? 24 : 25;
                 detect.cap = 0;
+                entry->map.max_bw   = VTSS_BW_DEFAULT;
                 if (((port_no == 24) || (port_no == 25)) && jr2_10g_detect(&detect, board_info)) {
+                    /* API Port 26,27 = XAUI chip ports 49,50 - possibly VTSS PHYs */
+                    entry->cap                 = detect.cap;
+                    if (board_info->port_cfg == VTSS_BOARD_CONF_DEFAULT_VENICE_1G_MODE) {
+                        /* chip ports 49-50 do not map to single XAUI lanes instead we use chip ports 24 and 28 */
+                        entry->map.chip_port       = port_no == 24 ? 24 : 28;
+                        entry->cap |= PORT_CAP_1G_FDX | PORT_CAP_AUTONEG;
+                    } else {
+                        entry->map.chip_port       = port_no == 24 ? 49 : 50;
+                    }
+
                     /* API Port 26-27: XAUI chip ports:49,50 possibly VTSS Phys */
-                    entry->map.chip_port = (port_no == 24) ? 49 : 50;
                     entry->map.miim_controller = VTSS_MIIM_CONTROLLER_0;
                     entry->map.miim_addr = detect.miim_addr[0];
                     entry->mac_if = VTSS_PORT_INTERFACE_XAUI;
-                    entry->cap = detect.cap;
                 } else {
                     entry->map.chip_port = (port_no + 25);
                     entry->map.miim_controller = VTSS_MIIM_CONTROLLER_NONE;
@@ -2159,6 +2166,12 @@ char *board_port_id_txt(vtss_board_port_cfg_t id)
         break;
     case VTSS_BOARD_CONF_16x2G5_4xSFI_NPI:
         txt = "16x2G5 + 4xSFP+ + NPI (21 ports, 81Gb)";
+        break;
+    case VTSS_BOARD_CONF_20x1G_4x2G5_2xSFI_NPI:
+        txt = "20x1G + 4x2G5 + 2xSFP+ + NPI (27 ports, 51Gb)";
+        break;
+    case VTSS_BOARD_CONF_DEFAULT_VENICE_1G_MODE:
+        txt = "Default board config with Venice ports in 1G";
         break;
     default:
         txt = "?";

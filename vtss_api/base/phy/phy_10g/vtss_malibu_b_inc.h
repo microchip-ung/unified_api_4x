@@ -1,26 +1,24 @@
 /*
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
  */
 
@@ -450,5 +448,113 @@ ioreg_blk mal_io_var;
 #define VTSS_X_HOST_PMA_32BIT_SD10G65_RX_RCPLL_SD10G65_RX_RCPLL_STAT1_PLLF_FSM_STAT(x)  VTSS_EXTRACT_BITFIELD(x,0,4)
 #define VTSS_X_LINE_PMA_32BIT_SD10G65_TX_RCPLL_SD10G65_TX_RCPLL_STAT1_PLLF_FSM_STAT(x)  VTSS_EXTRACT_BITFIELD(x,0,4)
 #define VTSS_X_LINE_PMA_32BIT_SD10G65_RX_RCPLL_SD10G65_RX_RCPLL_STAT1_PLLF_FSM_STAT(x)  VTSS_EXTRACT_BITFIELD(x,0,4)
+/**
+ * \brief
+ * Invert calibration value coming from the calibration FSM for IS
+ * threshold calibration.
+ *
+ * \details
+ * Field: VTSS_F2DF_DF2F_32BIT_SD10G65_IB_SD10G65_IB_CFG8 . IB_INV_THR_CAL_VAL
+ */
+#define  VTSS_F_F2DF_DF2F_32BIT_SD10G65_IB_SD10G65_IB_CFG8_IB_INV_THR_CAL_VAL  VTSS_BIT(14)
+
+
+
+/**
+ * \brief
+ * Controls the offset calibration target of the VScope FFs. Coding: 0:
+ * calibration target is zero, 1: calibration target is the programmed
+ * VScope threshold.
+ *
+ * \details
+ * Field: VTSS_F2DF_DF2F_32BIT_SD10G65_ACC_APC_IS_CAL_CFG1 . CAL_VSC_OFFSET_TGT
+ */
+#define  VTSS_F_F2DF_DF2F_32BIT_SD10G65_ACC_APC_IS_CAL_CFG1_CAL_VSC_OFFSET_TGT  VTSS_BIT(15)
+
+
+
+/**
+ * \brief
+ * frequency multiplier decoder bypass
+ *
+ * \details
+ * Field: VTSS_F2DF_DF2F_32BIT_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1 . SYNTH_FREQ_MULT_BYP
+ */
+#define  VTSS_F_F2DF_DF2F_32BIT_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1_SYNTH_FREQ_MULT_BYP  VTSS_BIT(26)
+
+
+/**
+ * \brief
+ * Select vco current,
+ *
+ * \details
+ * 0: lowest current
+ * 31: highest current
+ *
+ * Field: VTSS_F2DF_DF2F_32BIT_SD10G65_TX_RCPLL_SD10G65_TX_RCPLL_CFG2 . PLL_VCO_CUR
+ */
+#define  VTSS_F_F2DF_DF2F_32BIT_SD10G65_TX_RCPLL_SD10G65_TX_RCPLL_CFG2_PLL_VCO_CUR(x)  VTSS_ENCODE_BITFIELD(x,2,5)
+#define  VTSS_M_F2DF_DF2F_32BIT_SD10G65_TX_RCPLL_SD10G65_TX_RCPLL_CFG2_PLL_VCO_CUR     VTSS_ENCODE_BITMASK(2,5)
+#define  VTSS_X_F2DF_DF2F_32BIT_SD10G65_TX_RCPLL_SD10G65_TX_RCPLL_CFG2_PLL_VCO_CUR(x)  VTSS_EXTRACT_BITFIELD(x,2,5)
+
+/**
+ * \brief
+ * Actual value of the FSM stage,
+ *
+ * \details
+ * 0: reset state
+ * 1: init state after reset
+ * 3: ramp up state checks for the counters and ramps up the frequency
+ * 6: additional wait state for internal BIAS settling
+ * 8: additional wait state 1
+ * 9: additional wait state 2
+ * 10; additional wait state 3
+ * 11: additional wait state 4
+ * 12: 1st locking state enables dynamic locking
+ * 13: final locking state checks for out of lock and overrun condition
+ * 14: error state low frequency
+ * 15: error state high frequency
+ *
+ * Field: VTSS_F2DF_DF2F_32BIT_SD10G65_TX_RCPLL_SD10G65_TX_RCPLL_STAT1 . PLLF_FSM_STAT
+ */
+#define  VTSS_F_F2DF_DF2F_32BIT_SD10G65_TX_RCPLL_SD10G65_TX_RCPLL_STAT1_PLLF_FSM_STAT(x)  VTSS_ENCODE_BITFIELD(x,0,4)
+#define  VTSS_M_F2DF_DF2F_32BIT_SD10G65_TX_RCPLL_SD10G65_TX_RCPLL_STAT1_PLLF_FSM_STAT     VTSS_ENCODE_BITMASK(0,4)
+#define  VTSS_X_F2DF_DF2F_32BIT_SD10G65_TX_RCPLL_SD10G65_TX_RCPLL_STAT1_PLLF_FSM_STAT(x)  VTSS_EXTRACT_BITFIELD(x,0,4)
+
+
+
+
+/**
+ * \brief
+ * frequency multiplier decoder bypass
+ *
+ * \details
+ * Field: VTSS_F2DF_DF2F_32BIT_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG1 . SYNTH_FREQ_MULT_BYP
+ */
+#define  VTSS_F_F2DF_DF2F_32BIT_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG1_SYNTH_FREQ_MULT_BYP  VTSS_BIT(26)
+
+/**
+ * \brief
+ * Actual value of the FSM stage,
+ *
+ * \details
+ * 0: reset state
+ * 1: init state after reset
+ * 3: ramp up state checks for the counters and ramps up the frequency
+ * 6: additional wait state for internal BIAS settling
+ * 8: additional wait state 1
+ * 9: additional wait state 2
+ * 10; additional wait state 3
+ * 11: additional wait state 4
+ * 12: 1st locking state enables dynamic locking
+ * 13: final locking state checks for out of lock and overrun condition
+ * 14: error state low frequency
+ * 15: error state high frequency
+ *
+ * Field: VTSS_F2DF_DF2F_32BIT_SD10G65_RX_RCPLL_SD10G65_RX_RCPLL_STAT1 . PLLF_FSM_STAT
+ */
+#define  VTSS_F_F2DF_DF2F_32BIT_SD10G65_RX_RCPLL_SD10G65_RX_RCPLL_STAT1_PLLF_FSM_STAT(x)  VTSS_ENCODE_BITFIELD(x,0,4)
+#define  VTSS_M_F2DF_DF2F_32BIT_SD10G65_RX_RCPLL_SD10G65_RX_RCPLL_STAT1_PLLF_FSM_STAT     VTSS_ENCODE_BITMASK(0,4)
+#define  VTSS_X_F2DF_DF2F_32BIT_SD10G65_RX_RCPLL_SD10G65_RX_RCPLL_STAT1_PLLF_FSM_STAT(x)  VTSS_EXTRACT_BITFIELD(x,0,4)
 
 #endif

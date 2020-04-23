@@ -1,4 +1,140 @@
 ---------------------------------------------------------------------------
+Version : API-4.67.04
+Previous Version: API-4.67.03
+Date : 2018-05-04
+Code Revision:    8174bea47d82175a3dd025f04bc0da28fdf26653 
+Description:      Maintenance release with bug fixes
+
+PHY architecture name conversion table:
+=========================================
+ * Cobra     <=> VSC8211, VSC8221
+ * Quatro    <=> VSC8224, VSC8244
+ * Nano      <=> VSC8501, VSC8502
+ * Tesla     <=> VSC8504, VSC8552, VSC8572, VSC8574
+ * Atom12    <=> VSC8512, VSC8522
+ * Elise     <=> VSC8514
+ * Malibu    <=> VSC8254, VSC8256, VSC8257, VSC8258
+ * Venice    <=> VSC8489, VSC8490, VSC8491
+ * Viper     <=> VSC8562, VSC8564, VSC8575, VSC8582, VSC8584
+ * 8488      <=> VSC8487, VSC8488, VSC8487-15, VSC8488-15
+ * Daytona   <=> VSC8492
+ * Talladega <=> VSC8494
+ * Others    <=> VSC8484, VSC8486
+
+New features: 
+-------------
+Bugzilla#24008	1588: New API added for clearing correction field, vtss_phy_ts_flow_clear_cf_set
+Bugzilla#24017	Daytona: New API added to change from LAN mode to WAN mode without reconfiguring, vtss_custom_channel_mode_set
+Bugzilla#24018	1G PHY: New capability added to change the Media interface without performing a SW Reset in AMS modes, vtss_phy_mac_media_if_atom_setup
+
+Debug and test enhancements:
+----------------------------
+Bugzilla#23734	Venice/Malibu: Add debug function APC_Restart
+Bugzilla#23795	Malibu: Power On Self Test (POST) - MACsec Frame Test
+Bugzilla#23927	Tesla-E: Update to properly identify silicon using Reg30G
+Bugzilla#24009	Viper, Elise: New API vtss_phy_macsec_csr_sd6g_rd() added for debug reading from 6G serdes registers
+Bugzilla#24010	1588: New API vtss_phy_1588_debug_reg_read() to dump important 1588 IP block registers in readable format
+Bugzilla#24305	Venice: Changed API vtss_phy_10g_debug_reg_dump() to include additional registers
+
+Issues Fixed:
+-------------
+Bugzilla#19094	Venice/Malibu: Updated SYNCE support
+Bugzilla#20543	MACsec: Traffic does not pass following a shut/no shut post warmstart or post tag bypass value change
+Bugzilla#20872	Viper: Default 1588 ingress and egress latency improvements
+Bugzilla#22891	Malibu: After cross-connect link status is not correct & PTP application is not working
+Bugzilla#22906	Malibu-A: Line LCPLL cal re-trigger and other config settings missing in the init procedure for repeater mode
+Bugzilla#22935	Venice: Warmstart errors seen following an interface shut down
+Bugzilla#23140	Tesla: Incorporate OOS changes in customer environment from branches 4.20 and 4.49a
+Bugzilla#23271	Malibu-A: With WAN to LAN dynamic mode change Observed high mean path delay values.
+Bugzilla#23383	Malibu: Traffic does not properly restore following OTN to LAN or WAN mode change
+Bugzilla#23389	MSB of 32 bit values lost when Bit Masks and Bit Encode Macros for 32 bit values
+Bugzilla#23477	Tesla: OOS algorithm is running unexpectedly while media changed from dual to SFP
+Bugzilla#23499	Tesla: OOS is caused if Far-end Loop-back is enabled and disabled while traffic is running on the port
+Bugzilla#23674	Tesla: During OOS recovery, mis-configuration of Sport_Val or Sport_Mask can lead to OOS Failure
+Bugzilla#23691	Venice/Malibu: Sub-optimal setting of APC offset range may cause sporadic failure
+Bugzilla#23733	Tesla/Viper: PHY Status indicates Link Down for CuSFP in Forced mode
+Bugzilla#23788	Viper/Nano/Mini: 100Base-T Long Link-Up times occasionally seen in Forced mode
+Bugzilla#23801	Malibu: API reports incorrect error during loading
+Bugzilla#23822	Tesla-E: Updated init scripts
+Bugzilla#23883	Tesla/Viper: No timestamping post warmstart if IP block is used, i.e. PTP_IP_ETH
+Bugzilla#23895	Venice/Malibu: LCPLL calibration procedure changes
+Bugzilla#23929	Venice/Malibu: OOS preventive step causing issues within vtss_phy_10g_mode_set() in API 4.67.03
+Bugzilla#23947	Fix Coverity static analysis errors
+Bugzilla#23958	10G PHYs: Remove the requirement to define VTSS_CHIP_CU_PHY and VTSS_FEATURE_10GBASE_KR macros
+Bugzilla#23974	Tesla: MAC I/F SerDes init incorrect for non-sequential addressing
+Bugzilla#23998	Tesla-D: Updated micropatch to support SerDes init, but exclude NEW SPI MODE support
+Bugzilla#24022	Tesla: A warmstart occurring during the OOS recovery causes the OOS recovery to not clear thus keeping the port down
+Bugzilla#24037	Tesla-E: Perform revision check in OOS code immediately after silicon model check
+Bugzilla#24043	MACsec: Corrected out_pkts_encrypted as a 64 bit parameter in vtss_macsec_tx_sa_counters_get_priv ()
+Bugzilla#24052	Venice/Malibu: DFE runaway avoidance in 1G mode
+Bugzilla#24139	Viper-B: Far end loop back fails to simultaneously forward traffic to the MAC side.
+Bugzilla#24163	Venice/Malibu: Add fix for trailing frame being stuck in RX FC buffer after link up in 10GEWAN (PKT mode)
+Bugzilla#24169	1588 Bypass clear not working for base port during the initialization
+Bugzilla#24215	10G PHYs: Identify channel initialization order
+Bugzilla#24226	Viper/Elise: Incorrect MCB Addr for Port 1,2,3 when check SerDes config
+Bugzilla#24228 	Venice/Malibu: SREF implementation and usage differences
+Bugzilla#24229	10G: vtss_phy_10g_init() missing channel init type information
+Bugzilla#24249 	Malibu: vtss_phy_malibu_register_dump needs modifications
+Bugzilla#24265	MACsec: Correct semaphore deadlock if MACsec is enabled on non-MACsec port
+Bugzilla#24267	MACsec: INIT_BYPASS_DISABLE is not restoring complete MACsec configuration properly
+Bugzilla#24270	Viper: Observed OOS issue after warmstart with latest builds
+Bugzilla#24276	Telsa/Viper: FCS errors seen during warmstart when 1588 is enabled and active
+Bugzilla#24280	1588: clk_ena bit is being disabled as part of bypass enable/disable function
+Bugzilla#24286	1588: Correct the log message in the function vtss_phy_ts_bypass_set()
+Bugzilla#24287	Tesla-E: SI_CLK_LO_CYCS and SI_CLK_HI_CYCS values must follow proper rules for SPI pushout interface
+Bugzilla#24322 	Malibu: SCKOUT output frequency not as expected
+
+Known Issues:
+-------------
+Bugzilla#18459  VSC8582: VeriPHY function does not work correctly when no cable is plugged in
+Bugzilla#22541	Venice-A/B: Active status shows as False when PRBS counters are monitored with RX,TX inverted
+Bugzilla#23267	Malibu-D: PLL status errors are seen occasionally when speed is changed from 10G to 1G
+Bugzilla#23361	Viper-A: Packet with single VLAN header is not encrypted when control packet is set using etype along with tag bypass set
+Bugzilla#23451	Viper-B: PDV and MTIE values are high in 10Mb speed, values are around 100-120 ns
+Bugzilla#23740	Venice-D: PLL status errors are seen occasionally when speed is changed from 10G to 1G
+Bugzilla#24225	1G PHY: I2C functions do not address the entire 256-byte range
+Bugzilla#24271	Venice: Occasional bring up issues seen in 1G mode with API 4.67.03 in certain customer environment
+Bugzilla#24302	Venice/Malibu: Bit errors seen when sending 1G line rate thernet traffic with a continuous payload of 0x27/0x28
+Bugzilla#24320  Malibu/Venice has slightly high offset in 1pps when tested with Calnex (paragon-x)
+Bugzilla#24336 	Venice RevC/D: Loopback H2 does not work @ 1G data rate 	
+Bugzilla#24337 	Venice/Malibu: modifications needed in the Packet BIST configuration function 	
+Bugzilla#24346  Malibu: Link flap is observed on MACsec init_set disable
+
+Notes:
+------
+1. This release changes the default ingress/egress timestamp reference point for 1G operating mode of Viper family of devices to align with timestamp point of test equipment. The change will cause a PTP master or slave phase change of approximately 27ns compared to earlier releases. If MACsec is enabled the phase change is approximately 80 ns.
+2. For addressing the Bugzilla#24163, Rx FC buffer is reset in the API vtss_phy_10g_status_get. If this API is used to get the 10G PHY status, the API will identify and link toggle and run the work around. If this API is not used, then application should call the new API vtss_phy_10g_fc_buffer_reset on link up in WAN mode on all 10G PHYs
+3. VTSS_ARCH_MALIBU_B, VTSS_ARCH_VENICE_C are defined in the options.h file by default for 10G PHYs and these are required to be defined for proper SERDES settings. There no need to define these explicitly.
+4. A new API vtss_phy_10g_init is introduced in this release. This API can be used to initialize the 10G PHYs before doing a vtss_phy_10g_mode_set. This was introduced to make sure the vtss_phy_10g_mode_get works before the vtss_phy_10g_mode_set and populate some default config in the software state. Calling this API is not mandatory and still customers can continue using the vtss_phy_10g_mode_set alone works.  we recommend using the vtss_phy_10g_init, vtss_phy_10g_mode_get and vtss_phy_10g_mode_set in the that sequence. API vtss_phy_10g_init will detect the PHY and populate some default configuration parameters. Then  vtss_phy_10g_mode_get can be called and the some parameters can be modified as per the requirement and use the vtss_phy_10g_mode_set.
+5. The macro VTSS_TS_FIFO_SYNC_LOOPBACK is to be defined to have OOS Recovery called when Far-End loopback is disabled.
+6. API is now MIT licensed. See the license below for reference.
+
+/*
+
+
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
+
+*/
+
+---------------------------------------------------------------------------
 Version : API-4.67.03
 Previous Version: API-4.67.02 (limited release)
 Date : 2017-09-06

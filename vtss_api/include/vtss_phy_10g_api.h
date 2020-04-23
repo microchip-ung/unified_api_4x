@@ -1,28 +1,26 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
- 
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
+
 
 */
 
@@ -319,6 +317,18 @@ typedef struct {
                          DAC mode, insertion loss independent,value for vtail: 2 */
 } vtss_phy_10g_jitter_conf_t;
 
+/** \brief Channel modes - Auto is recommended */
+typedef enum {
+    /** Automatically detects the channel id based on the phy order. The phys be
+     * setup in the consecutive order, from the lowest MDIO to highest MDIO
+     * address */
+    VTSS_CHANNEL_AUTO,
+    VTSS_CHANNEL_0,      /**< Channel id is hardcoded to 0  */
+    VTSS_CHANNEL_1,      /**< Channel id is hardcoded to 1  */
+    VTSS_CHANNEL_2,      /**< Channel id is hardcoded to 2  */
+    VTSS_CHANNEL_3,      /**< Channel id is hardcoded to 3  */
+} vtss_channel_t;
+
 /** \brief 10G Phy operating mode */
 typedef struct {
     oper_mode_t oper_mode;                 /**< Phy operational mode */
@@ -330,16 +340,7 @@ typedef struct {
     BOOL  high_input_gain;   /**< Disable=0 (default), Enable=1. Should not be enabled unless needed */
     BOOL  xfi_pol_invert;    /**< Selects polarity ot the TX XFI data. 1:Invert 0:Normal */
     BOOL  xaui_lane_flip;    /**< Swaps lane 0 <--> 3 and 1 <--> 2 for both RX and TX */
-
-    /** \brief Channel modes - Auto is recommended */
-    enum {
-        VTSS_CHANNEL_AUTO,   /**< Automatically detects the channel id based on the phy order.  
-                                The phys be setup in the consecutive order, from the lowest MDIO to highest MDIO address */
-        VTSS_CHANNEL_0,      /**< Channel id is hardcoded to 0  */
-        VTSS_CHANNEL_1,      /**< Channel id is hardcoded to 1  */
-        VTSS_CHANNEL_2,      /**< Channel id is hardcoded to 2  */
-        VTSS_CHANNEL_3,      /**< Channel id is hardcoded to 3  */
-    } channel_id;            /**< Channel id of this instance of the Phy  */
+    vtss_channel_t channel_id; /**< Channel id of this instance of the Phy  */
 
 #if defined(VTSS_FEATURE_SYNCE_10G)
     BOOL hl_clk_synth;                          /**< 0: Free running clock  1: Hitless clock   */
@@ -378,8 +379,8 @@ typedef struct {
                                    range = 0x18-0x2C default values (SR mode): Venice-A/B 0x18; Malibu-A, Venice-C 0x2C; Malibu-B 0x18*/
         u32 apc_host_eqz_ld_ctrl; /**< APC EQZ Host LD control(value of LD_LEV_INI, host apc value. Updated when apc_line_ld_ctrl is set)
                                    range = 0x18-0x2C default values (SR mode): Venice-A/B 0x18; Malibu-A, Venice-C 0x2C; Malibu-B 0x18*/
-        BOOL l_offset_guard; /**< Line offset control */
-        BOOL h_offset_guard; /**< Host offset control */
+        BOOL l_offset_guard; /**< This variable is deprecated, not to be used */
+        BOOL h_offset_guard; /**< This variable is deprecated, not to be used */
     } serdes_conf;            /**< Serdes configuration                                                */
 
     apc_ib_regulator_t apc_ib_regulator; /**< Analog Parameter Control / IB equalizer  (only for Venice family)*/
@@ -427,21 +428,30 @@ vtss_rc vtss_phy_10g_mode_get (const vtss_inst_t inst,
                                const vtss_port_no_t port_no, 
                                vtss_phy_10g_mode_t *const mode);
 
+/** \brief 10G Phy Initialization configuration */
+typedef struct {
+        vtss_channel_t channel_conf; /**< Channel configuration selection,manual or auto */
+} vtss_phy_10g_init_parm_t;
+
 /**
- * \brief Identify PHY,Initialize software accordingly .
- * \brief It is first API to be executed before using device
- * \brief It is mandatory requirement that the API is to be called in order of,
- * \brief base_port first followed by alternate ports
+ * \brief Identify PHY and initialize software accordingly.
+ * \brief This API initializes the mode to 10G LAN.
+ * \brief It supports AUTO and MANUAL channel Configuration.
+ * \brief For AUTO channel Assignment the API should be called in the channel order ( 0 -> 3)
+ * \brief For MANUAL channel Assignment the API can be called in any order,
+ * \brief Application must provide the correct channel number specific to a port while calling Manual channel Assignment.
  *
- * \param inst [IN]     Target instance reference.
- * \param port_no [IN]  Port number.
+ * \param inst      [IN] Target instance reference.
+ * \param port_no   [IN] Port number.
+ * \param init_conf [IN] Configuration.
  *
  * \return
  *   VTSS_RC_OK on success.\n
  *   VTSS_RC_ERROR on error.
  **/
 vtss_rc vtss_phy_10g_init (const vtss_inst_t inst, 
-                           const vtss_port_no_t port_no);
+                           const vtss_port_no_t port_no,
+                           const vtss_phy_10g_init_parm_t *const init_conf);
 
 /**
  * \brief Identify, Reset and set the operating mode of the PHY.
@@ -556,6 +566,23 @@ vtss_rc vtss_phy_10g_apc_status_get (const vtss_inst_t inst,
                                      const vtss_port_no_t port_no,
                                      const BOOL is_host,
                                      vtss_phy_10g_apc_status_t *const apc_status);
+
+/**
+ * \brief Restart of APC - Debug function only.
+ *
+ * \param inst [IN]     Target instance reference.
+ * \param port_no [IN]  Port number.
+ * \param is_host [IN]  Configuration side.
+ * 
+ *
+ * \return
+ *   VTSS_RC_OK on success.\n
+ *   VTSS_RC_ERROR on error.
+ **/
+vtss_rc vtss_phy_10g_apc_restart (const vtss_inst_t inst,
+                                  const vtss_port_no_t port_no,
+                                  const BOOL is_host);
+
 /**
  * \brief Configure optimised jitter 
  *
@@ -1102,8 +1129,8 @@ typedef enum {
  **/
 typedef struct {
     BOOL                      enable;          /**< Enable/Disable LANE SYNC */
-    vtss_phy_10g_tx_macro_t   tx_macro;        /**< Tx Macro to lane sync to */
-    vtss_phy_10g_rx_macro_t   rx_macro;        /**< Rx Macro to lane sync to */
+    vtss_phy_10g_tx_macro_t   tx_macro;        /**< Tx Macro to lane sync to (destination)*/
+    vtss_phy_10g_rx_macro_t   rx_macro;        /**< Rx Macro to lane sync from  (Source)*/
     u8                        rx_ch;          /**< 0[Default] to 3- NA If rx_macro is SREFCLK */
     u8                        tx_ch;          /**< 0[Default] to 3- NA If tx_macro is SCKOUT */
 } vtss_phy_10g_lane_sync_conf_t;
@@ -1897,7 +1924,7 @@ typedef struct {
 	u32 errors[PHASE_POINTS][AMPLITUDE_POINTS];	/**<error matrix in full scan mode */
 } vtss_phy_10g_vscope_scan_status_t;
 
-/** \ brief VSCOPE fast scan status *//**
+/** \ brief VSCOPE fast scan status
  * \brief set VSCOPE fast scan configuration
  * \param inst    [IN]  Target instance reference.
  * \param port_no [IN]  Port number
@@ -1906,7 +1933,7 @@ typedef struct {
  * \return
  *   VTSS_RC_OK on success.\n
  *   VTSS_RC_ERROR on error.
- **/
+ */
 vtss_rc vtss_phy_10g_vscope_scan_status_get(const vtss_inst_t inst,
 		const vtss_port_no_t port_no,
 		vtss_phy_10g_vscope_scan_status_t *const conf);
@@ -2108,6 +2135,7 @@ typedef struct {
     BOOL ptp;             /**< PTP or standard frame              */
     BOOL ingress;         /**< Ingress or egress                  */
     BOOL frames ;         /**< frames or idles                    */
+    BOOL frame_single ;   /**< Generate single packet             */
     u16 etype;            /**< Ethertype                          */
     u8 pkt_len;           /**< Packet length,min=64,max=16KB      */
     u32 ipg_len;          /**< Inter Packet Gap                   */
@@ -2272,6 +2300,9 @@ vtss_rc vtss_phy_10g_id_get(const vtss_inst_t   inst,
 typedef u32 vtss_gpio_no_t; /**< GPIO type for 1G ports*/
 #endif
 
+/**
+ * \brief GPIO configured mode
+ **/
 typedef enum {
     VTSS_10G_PHY_GPIO_NOT_INITIALIZED,   /**< This GPIO pin has has been initialized by a call to API from application. aregisters contain power-up default value */
     VTSS_10G_PHY_GPIO_OUT,               /**< Output enabled */
@@ -2726,6 +2757,18 @@ typedef struct {
 vtss_rc vtss_phy_10g_edc_fw_status_get(const vtss_inst_t     inst,
                                        const vtss_port_no_t  port_no,
                                        vtss_phy_10g_fw_status_t  *const status);
+
+/**
+ * \brief debug function for PHY 10G FC buffer reset
+ *
+ * \param inst [IN]     Target instance reference.
+ * \param port_no [IN]  Any phy port with the chip
+ *
+ * \return VTSS_RC_OK - success of fc buffer reset
+ **/
+
+vtss_rc vtss_phy_10g_fc_buffer_reset(const vtss_inst_t inst,
+                                     const vtss_port_no_t  port_no);
 
 /**
  * \brief CSR register read

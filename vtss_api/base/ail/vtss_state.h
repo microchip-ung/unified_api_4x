@@ -1,27 +1,25 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
 
 */
@@ -407,10 +405,12 @@ typedef struct {
     vtss_rc (* malibu_phy_10g_base_kr_ld_adv_ability_set) (struct vtss_state_s *vtss_state,
                                      vtss_port_no_t port_no, BOOL host_kr, BOOL line_kr);
 #endif
+#ifdef VTSS_FEATURE_10GBASE_KR
     vtss_rc (*venice_phy_10g_kr_status_get)(struct vtss_state_s *vtss_state,const vtss_port_no_t port_no,
                                      vtss_phy_10g_base_kr_status_t *const line_kr);
     vtss_rc (*malibu_phy_10g_kr_status_get)(struct vtss_state_s *vtss_state,const vtss_port_no_t port_no,
                                     BOOL host_kr, vtss_phy_10g_base_kr_status_t *const line_kr);
+#endif
 
     vtss_rc (* phy_10g_clause_37_status_get) (struct vtss_state_s *vtss_state,
                                               vtss_port_no_t port_no,
@@ -448,6 +448,10 @@ typedef struct {
                                             const vtss_port_no_t port_no,
                                             vtss_phy_10g_extnd_event_t  *const ex_events);
 
+    vtss_rc (* venice_phy_10g_apc_restart)(struct vtss_state_s *vtss_state,
+                                           const vtss_port_no_t port_no,
+                                           const BOOL is_host);
+
     vtss_rc (* malibu_phy_10g_ib_conf_set)(struct vtss_state_s *vtss_state,
                                            const vtss_port_no_t port_no,
                                            const vtss_phy_10g_ib_conf_t *const ib_conf,
@@ -466,6 +470,9 @@ typedef struct {
                                            const vtss_port_no_t port_no,
                                            const BOOL is_host,
                                            vtss_phy_10g_apc_status_t *const apc_status);
+    vtss_rc (* malibu_phy_10g_apc_restart)(struct vtss_state_s *vtss_state,
+                                           const vtss_port_no_t port_no,
+                                           const BOOL is_host);
     vtss_rc (* malibu_phy_10g_jitter_conf_set)(struct vtss_state_s *vtss_state,
                                            const vtss_port_no_t port_no,
                                            const BOOL is_host,
@@ -496,6 +503,7 @@ typedef struct {
                                             vtss_phy_10g_prbs_mon_conf_t *const mon_status,
                                             BOOL line,
                                             BOOL reset);
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
     vtss_rc (* venice_1588_fifo_reset)(struct vtss_state_s *vtss_state,
                                            const vtss_port_no_t port_no,
                                            const vtss_phy_10g_fifo_sync_t *conf);
@@ -503,6 +511,10 @@ typedef struct {
     vtss_rc (* malibu_1588_fifo_reset) (struct vtss_state_s *vtss_state,
                                               const vtss_port_no_t port_no,
                                               const vtss_phy_10g_fifo_sync_t *conf);
+#endif
+    vtss_rc (* venice_cross_connect) (struct vtss_state_s *vtss_state,
+                                      const vtss_port_no_t port_no,
+                                      const u16 value);
 
     vtss_rc (* malibu_phy_10g_pkt_gen_conf)(struct vtss_state_s *vtss_state,
                                             const vtss_port_no_t        port_no,
@@ -519,7 +531,6 @@ typedef struct {
     vtss_rc (*malibu_phy_10g_clause_37_control_set) (struct vtss_state_s     *vtss_state,
                                                      const vtss_port_no_t     port_no);
     vtss_rc (* malibu_phy_10g_auto_failover_set)(struct vtss_state_s *vtss_state,
-                                            const vtss_port_no_t        port_no,
                                             const vtss_phy_10g_auto_failover_conf_t    *mode);
     vtss_rc (* malibu_phy_10g_gpio_read) (struct vtss_state_s *vtss_state,
                                           const vtss_port_no_t             port_no,
@@ -1020,7 +1031,9 @@ typedef struct {
     vtss_rc(*misc_event_poll)(struct vtss_state_s *vtss_state,
                                  const vtss_port_no_t port_no,
                                  vtss_misc_event_t *const status);
-
+    vtss_rc (* custom_channel_mode_set)(struct vtss_state_s *vtss_state,
+                                        u16 channel, vtss_config_mode_t conf_mode,
+                                        u32 two_lane_upi);
 #endif /* VTSS_ARCH_DAYTONA */
 
 } vtss_cil_func_t;
@@ -1100,6 +1113,7 @@ typedef struct {
     BOOL                             one_step_txfifo;
     u8                               ip1_nxt_cmp[4]; /* IP1 comparator is available only in blocks 0,1,2,3. */
     u8                               ip2_nxt_cmp[4]; /* IP2 comparator is available only in blocks 0,1,2,3. */
+    BOOL                             oos_recovery_active;
 } vtss_phy_ts_port_conf_t;
 
 typedef struct {

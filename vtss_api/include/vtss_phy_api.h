@@ -1,27 +1,25 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
 
 */
@@ -386,6 +384,14 @@ typedef struct {
     BOOL   force_fefi_value;                     /**< Forces/Suppress FEFI */
 } vtss_phy_media_serd_pcs_cntl_t;
 
+/** \brief PHY AMS Force configuration */
+typedef enum {
+    VTSS_PHY_MEDIA_FORCE_AMS_SELECTION_NORMAL   = 0,    /**< Force AMS Override to Force Selection - Normal */
+    VTSS_PHY_MEDIA_FORCE_AMS_SELECTION_SERDES   = 1,    /**< Force AMS Override to Force Selection - SerDes Media */
+    VTSS_PHY_MEDIA_FORCE_AMS_SELECTION_COPPER   = 2     /**< Force AMS Override to Force Selection - Copper Media */
+} vtss_phy_media_force_ams_sel_t;
+
+
 /** \brief PHY configuration */
 typedef struct {
     vtss_phy_mode_t                 mode;         /**< PHY mode */
@@ -397,8 +403,8 @@ typedef struct {
     vtss_phy_unidirectional_t       unidir;       /**< Unidirectional Configuration */
     vtss_phy_mac_serd_pcs_cntl_t    mac_if_pcs;   /**< PHY MAC SerDes PCS Control (Reg16E3) */
     vtss_phy_media_serd_pcs_cntl_t  media_if_pcs; /**< PHY MAC SerDes PCS Control (Reg23E3) */
+    vtss_phy_media_force_ams_sel_t  force_ams_sel;/**< PHY Media AMS Force Selection        */
 } vtss_phy_conf_t;
-
 
 /** 
  * \brief Get chip temperature
@@ -1099,7 +1105,13 @@ vtss_rc vtss_phy_coma_mode_enable(const vtss_inst_t            inst,
 
 
 
-/** \brief debug function for Atom family Rev. A. chips */
+/** 
+  * \brief debug function for Atom family Rev. A. chips
+  * 
+  * \param inst [IN]     Target instance reference.
+  * \param vga_adc_pwr [IN] allows VGA and/or ADC to power down for EEE
+  * \param port_no [IN]  Port number (Any port number for the PHY which shall pull the coma mode pin low. remember to use same port number as when calling vtss_phy_coma_mode_disable).
+ */
 void vga_adc_debug(const vtss_inst_t inst, u8 vga_adc_pwr, vtss_port_no_t port_no);
 
 
@@ -2047,6 +2059,41 @@ vtss_rc vtss_phy_ext_event_poll(const vtss_inst_t     inst,
 vtss_rc vtss_phy_status_inst_poll(const vtss_inst_t    inst,
                                   const vtss_port_no_t port_no,
                                   vtss_port_status_t   *const status);
+/**
+ * \brief Function for Reading from 6G serdes registers (applicable only on VIPER,ELISE)
+ *
+ * \param inst         [IN] Target instance reference.
+ * \param port_no      [IN] Any phy port with the chip
+ * \param target       [IN] The CSR target
+ * \param csr_reg_addr [IN] The CSR register to read,
+ * \param value        [OUT] The value read
+ *
+ * \return VTSS_RC_OK when new access can be done - VTSS_RC_ERROR if something when wrong and access was never granted.
+ **/
+vtss_rc vtss_phy_macsec_csr_sd6g_rd(vtss_inst_t          inst,
+                                    const vtss_port_no_t port_no,
+                                    const u16            target,
+                                    const u32            csr_reg_addr,
+                                    u32                  *value);
+
+
+/**
+ * \brief Function for Writing to 6G serdes registers (applicable only on VIPER,ELISE)
+ *
+ * \param inst         [IN] Target instance reference.
+ * \param port_no      [IN] Any phy port with the chip
+ * \param target       [IN] The CSR target
+ * \param csr_reg_addr [IN] The CSR register to read,
+ * \param value        [IN] The value read
+ *
+ * \return VTSS_RC_OK when new access can be done - VTSS_RC_ERROR if something when wrong and access was never granted.
+ **/
+vtss_rc vtss_phy_macsec_csr_sd6g_wr(vtss_inst_t          inst,
+                                    const vtss_port_no_t port_no,
+                                    const u16            target,
+                                    const u32            csr_reg_addr,
+                                    u32                  value);
+
 
 #ifdef __cplusplus
 }

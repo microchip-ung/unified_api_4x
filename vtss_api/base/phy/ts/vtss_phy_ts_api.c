@@ -1,26 +1,24 @@
 /*
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
 */
 
@@ -38,6 +36,10 @@
 #include "vtss_phy_ts.h"
 #ifdef VTSS_ARCH_DAYTONA
 #include "../../daytona/vtss_daytona_basics.h"
+#endif
+
+#ifdef TESLA_ING_TS_ERRFIX
+#include "vtss_phy_ts_util.h"
 #endif
 
 #if defined(VTSS_FEATURE_MACSEC)
@@ -205,6 +207,12 @@ static vtss_rc vtss_phy_warm_wr_masked(vtss_state_t         *vtss_state,
     return VTSS_RC_OK;
 }
 #endif //VTSS_CHIP_CU_PHY
+
+#define ENABLE_1588_DEBUG_REG_READ
+#ifdef ENABLE_1588_DEBUG_REG_READ
+vtss_rc vtss_phy_1588_debug_reg_read_private(vtss_state_t *vtss_state, vtss_port_no_t port_no, u32 blk_id, const vtss_debug_printf_t pr);
+#endif
+
 /*TBD: not in current register file set for PTP*/
 #define VTSS_ANA_OAM_PTP_FLOW_PTP_ZERO_FIELD_CTL_PTP_OAM_FRAME VTSS_BIT(15) /*TBD*/
 extern long long int llabs(long long int);
@@ -767,63 +775,70 @@ static  u32 latency_egr_1g[VTSS_PHY_TS_CLOCK_FREQ_MAX - 1 /* don't support 500MH
     [VTSS_PHY_TS_CLOCK_FREQ_250M]   =  6,
 };
 
+/* Latency values for Viper familty are updated as fix for Bug#20872 with a value of 
+ * +27 for 1000Base-T on Ingress
+ * -27 for 1000Base-T on Egress
+ * +35 for 1000Base-X on Ingress
+ * -27 for 1000Base-X on Egress
+ */
+ 
 /* Latency values for copper PHYs, MACSEC = OFF */
 static  u32 latency_ingr_gen2_1g[VTSS_PHY_TS_CLOCK_FREQ_MAX - 1 /* don't support 500MHz */][3] = {
-    {  208, 304, 2023 /* 1000,100,10 speeds */},
-    {  208, 304, 2023 /* 1000,100,10 speeds */},
-    {  208, 304, 2023 /* 1000,100,10 speeds */},
-    {  208, 304, 2023 /* 1000,100,10 speeds */},
+    {  235, 304, 2023 /* 1000,100,10 speeds */},
+    {  235, 304, 2023 /* 1000,100,10 speeds */},
+    {  235, 304, 2023 /* 1000,100,10 speeds */},
+    {  235, 304, 2023 /* 1000,100,10 speeds */},
 };
 static  u32 latency_egr_gen2_1g[VTSS_PHY_TS_CLOCK_FREQ_MAX - 1 /* don't support 500MHz */][3] = {
-    { 1272, 12516, 125444  /* 1000,100,10 speeds */},
-    { 1272, 12516, 125444  /* 1000,100,10 speeds */},
-    { 1272, 12516, 125444  /* 1000,100,10 speeds */},
-    { 1272, 12516, 125444  /* 1000,100,10 speeds */},
+    { 1245, 12516, 125444  /* 1000,100,10 speeds */},
+    { 1245, 12516, 125444  /* 1000,100,10 speeds */},
+    { 1245, 12516, 125444  /* 1000,100,10 speeds */},
+    { 1245, 12516, 125444  /* 1000,100,10 speeds */},
 };
 
 /* Latency values for fiber PHYs, MACSEC = OFF*/
 static  u32 latency_ingr_gen2_1g_fbr[VTSS_PHY_TS_CLOCK_FREQ_MAX - 1 /* don't support 500MHz */][2] = {
-    {  98, 197 /* 1000,100 speeds */},
-    {  98, 197 /* 1000,100 speeds */},
-    {  98, 197 /* 1000,100 speeds */},
-    {  98, 197 /* 1000,100 speeds */},
+    {  133, 197 /* 1000,100 speeds */},
+    {  133, 197 /* 1000,100 speeds */},
+    {  133, 197 /* 1000,100 speeds */},
+    {  133, 197 /* 1000,100 speeds */},
 };
 static  u32 latency_egr_gen2_1g_fbr[VTSS_PHY_TS_CLOCK_FREQ_MAX - 1 /* don't support 500MHz */][2] = {
-    { 1277, 12537 },
-    { 1277, 12537 },
-    { 1277, 12537 },
-    { 1277, 12537 },
+    { 1250, 12537 },
+    { 1250, 12537 },
+    { 1250, 12537 },
+    { 1250, 12537 },
 };
 
 /* Latency values for copper PHYs, MACSEC = ON */
 static  u32 latency_ingr_gen2_1g_macsec[VTSS_PHY_TS_CLOCK_FREQ_MAX - 1 /* don't support 500MHz */][3] = {
-    {  2408, 22300, 222009  /* 1000,100,10 speeds */},
-    {  2408, 22300, 222009  /* 1000,100,10 speeds */},
-    {  2408, 22300, 222009  /* 1000,100,10 speeds */},
-    {  2408, 22300, 222009  /* 1000,100,10 speeds */},
+    {  2492, 22300, 222009  /* 1000,100,10 speeds */},
+    {  2492, 22300, 222009  /* 1000,100,10 speeds */},
+    {  2492, 22300, 222009  /* 1000,100,10 speeds */},
+    {  2492, 22300, 222009  /* 1000,100,10 speeds */},
 };
 
 static  u32 latency_egr_gen2_1g_macsec[VTSS_PHY_TS_CLOCK_FREQ_MAX - 1 /* don't support 500MHz */][3] = {
-    { 3496, 34760, 347844 /* 1000,100,10 speeds */},
-    { 3496, 34760, 347844 /* 1000,100,10 speeds */},
-    { 3496, 34760, 347844 /* 1000,100,10 speeds */},
-    { 3496, 34760, 347844 /* 1000,100,10 speeds */},
+    { 3414, 34760, 347844 /* 1000,100,10 speeds */},
+    { 3414, 34760, 347844 /* 1000,100,10 speeds */},
+    { 3414, 34760, 347844 /* 1000,100,10 speeds */},
+    { 3414, 34760, 347844 /* 1000,100,10 speeds */},
 };
 
 
 /* Latency values for fiber PHYs, MACSEC = ON */
 static  u32 latency_ingr_gen2_1g_fbr_macsec[VTSS_PHY_TS_CLOCK_FREQ_MAX - 1 /* don't support 500MHz */][2] = {
-    {  2299, 22192  /* 1000,100 speeds */},
-    {  2299, 22192  /* 1000,100 speeds */},
-    {  2299, 22192  /* 1000,100 speeds */},
-    {  2299, 22192  /* 1000,100 speeds */},
+    {  2383, 22192  /* 1000,100 speeds */},
+    {  2383, 22192  /* 1000,100 speeds */},
+    {  2383, 22192  /* 1000,100 speeds */},
+    {  2383, 22192  /* 1000,100 speeds */},
 };
 
 static  u32 latency_egr_gen2_1g_fbr_macsec[VTSS_PHY_TS_CLOCK_FREQ_MAX - 1 /* don't support 500MHz */][2] = {
-    { 3502, 34780 /* 1000,100 speeds */},
-    { 3502, 34780 /* 1000,100 speeds */},
-    { 3502, 34780 /* 1000,100 speeds */},
-    { 3502, 34780 /* 1000,100 speeds */},
+    { 3420, 34780 /* 1000,100 speeds */},
+    { 3420, 34780 /* 1000,100 speeds */},
+    { 3420, 34780 /* 1000,100 speeds */},
+    { 3420, 34780 /* 1000,100 speeds */},
 };
 
 /* Stall latency when MACSEC =ON */
@@ -993,6 +1008,7 @@ vtss_rc vtss_phy_ts_spi_unpause_priv(vtss_state_t *vtss_state,
 /* ================================================================= *
  *  Local functions
  * ================================================================= */
+
 static vtss_rc vtss_phy_ts_register_access_type_get(
     vtss_state_t *vtss_state,
     const vtss_port_no_t port_no,
@@ -1027,7 +1043,7 @@ static vtss_rc vtss_phy_ts_register_access_type_get(
             *oper_mode = VTSS_PHY_TS_OPER_MODE_1G;
         } else {
             *oper_mode = VTSS_PHY_TS_OPER_MODE_INV;
-            VTSS_E("port %u is being operated in unknow data rate ",port_no);
+            VTSS_E("port %u is being operated in unknow data rate ", port_no);
             return VTSS_RC_ERROR;
         }
         return VTSS_RC_OK;
@@ -1060,7 +1076,7 @@ static vtss_rc vtss_phy_ts_register_access_type_get(
 }
 
 /* This function gives information about the 1588 supported devices */
-static BOOL vtss_phy_ts_is_1588_supported(vtss_state_t *vtss_state, const vtss_port_no_t port_no)
+static vtss_rc  vtss_phy_ts_is_1588_supported(vtss_state_t *vtss_state, const vtss_port_no_t port_no, BOOL *gen2, BOOL *support)
 {
 
     u32 dev_id = 0;
@@ -1096,10 +1112,16 @@ static BOOL vtss_phy_ts_is_1588_supported(vtss_state_t *vtss_state, const vtss_p
     case VTSS_PHY_TYPE_8489_15:
     case VTSS_PHY_TYPE_8490:
     case VTSS_PHY_TYPE_8491:
+        is_supported = TRUE;
+        break;
     case VTSS_PHY_TYPE_8257:
     case VTSS_PHY_TYPE_8254:
     case VTSS_PHY_TYPE_8258:
-        is_supported = TRUE;
+        if (vtss_state->phy_10g_state[port_no].mode.oper_mode == VTSS_PHY_REPEATER_MODE) {
+            is_supported = FALSE;
+        } else {
+            is_supported = TRUE;
+        }
         break;
 #endif /* VTSS_CHIP_10G_PHY */
 #ifdef VTSS_CHIP_CU_PHY
@@ -1122,7 +1144,30 @@ static BOOL vtss_phy_ts_is_1588_supported(vtss_state_t *vtss_state, const vtss_p
         is_supported = FALSE;
         break;
     }
-    return is_supported;
+
+    *support = is_supported;
+    *gen2 = FALSE;
+
+#if defined(VTSS_CHIP_CU_PHY)
+    if ((dev_id == VTSS_PHY_TYPE_8575) ||
+        (dev_id == VTSS_PHY_TYPE_8582) ||
+        (dev_id == VTSS_PHY_TYPE_8584) ||
+        (dev_id == VTSS_PHY_TYPE_8586)) {
+        *gen2 = TRUE;
+    }
+#endif /* VTSS_CHIP_CU_PHY */
+#if defined(VTSS_CHIP_10G_PHY)
+    if ((dev_id == VTSS_PHY_TYPE_8489) ||
+        (dev_id == VTSS_PHY_TYPE_8489_15) ||
+        (dev_id == VTSS_PHY_TYPE_8490) ||
+        (dev_id == VTSS_PHY_TYPE_8491) ||
+        (dev_id == VTSS_PHY_TYPE_8257) ||
+        (dev_id == VTSS_PHY_TYPE_8258) ||
+        (dev_id == VTSS_PHY_TYPE_8254)) {
+        *gen2 = TRUE;
+    }
+#endif /* VTSS_CHIP_10G_PHY */
+    return VTSS_RC_OK;
 }
 
 static vtss_rc vtss_phy_ts_biu_address_map_get(
@@ -1211,8 +1256,11 @@ vtss_rc vtss_phy_ts_read_csr(vtss_state_t *vtss_state,
     u16                        cmd_csr = 0;
     BOOL                       spi_access = FALSE;
     BOOL                       csr_timeout = FALSE;
+    BOOL                       gen2 = FALSE;
+    BOOL                       support = FALSE;
 
-    if (vtss_state->phy_ts_port_conf[port_no].is_gen2 == TRUE) {
+    VTSS_RC(vtss_phy_ts_is_1588_supported(vtss_state, port_no, &gen2, &support));
+    if (gen2) {
         spi_access = vtss_state->init_conf.spi_32bit_read_write || vtss_state->init_conf.spi_read_write;
     }
     VTSS_RC(vtss_phy_ts_register_access_type_get(vtss_state, cfg_port, &phy_type, &device_feature_status,
@@ -1522,6 +1570,8 @@ vtss_rc vtss_phy_ts_write_csr(vtss_state_t *vtss_state,
     u16                        cmd_csr = 0;
     BOOL                       spi_access = FALSE;
     BOOL                       csr_timeout = FALSE;
+    BOOL                       gen2 = FALSE;
+    BOOL                       support = FALSE;
 
 #if defined(VTSS_CHIP_10G_PHY) || defined(VTSS_CHIP_CU_PHY)
     u16                        reg_value_upper, reg_value_lower;
@@ -1529,7 +1579,8 @@ vtss_rc vtss_phy_ts_write_csr(vtss_state_t *vtss_state,
     reg_value_lower = (*value & 0xffff);
     reg_value_upper = (*value >> 16);
 #endif
-    if (vtss_state->phy_ts_port_conf[port_no].is_gen2 == TRUE) {
+    VTSS_RC(vtss_phy_ts_is_1588_supported(vtss_state, port_no, &gen2, &support));
+    if (gen2) {
         spi_access = vtss_state->init_conf.spi_32bit_read_write || vtss_state->init_conf.spi_read_write;
     }
 
@@ -2039,8 +2090,7 @@ vtss_rc vtss_phy_10g_id_get_priv(vtss_state_t *vtss_state,
             if (phy_id->channel_id <= 1) {
                 phy_id->phy_api_base_no = vtss_state->phy_10g_state[port_no].phy_api_base_no;
             } else {
-                /* Assumes that channel 0 i.e base port is last in the order of front panel ports */
-                phy_id->phy_api_base_no = vtss_state->phy_10g_state[port_no].phy_api_base_no - 2;
+                phy_id->phy_api_base_no = get_port_from_channel_id(vtss_state, port_no, 2);
             }
 
         }
@@ -2431,14 +2481,14 @@ static vtss_rc vtss_phy_ts_port_init(vtss_state_t *vtss_state,
     if (conf->tx_fifo_spi_conf == TRUE) {
         value = 0;
         VTSS_RC(VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0),
-                    VTSS_PTP_TS_FIFO_SI_TS_FIFO_SI_CFG, &value));
+                                     VTSS_PTP_TS_FIFO_SI_TS_FIFO_SI_CFG, &value));
         /* clearing bitfeilds SI_CLK_HI_CYCS(10:6),SI_CLK_LO_CYCS(5:1) */
         value = VTSS_PHY_TS_CLR_BITS(value, 0x7fe);
         value |= VTSS_F_PTP_TS_FIFO_SI_TS_FIFO_SI_CFG_SI_CLK_HI_CYCS(conf->tx_fifo_hi_clk_cycs);
         value |= VTSS_F_PTP_TS_FIFO_SI_TS_FIFO_SI_CFG_SI_CLK_LO_CYCS(conf->tx_fifo_lo_clk_cycs);
         VTSS_RC(VTSS_PHY_TS_WRITE_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0),
-                    VTSS_PTP_TS_FIFO_SI_TS_FIFO_SI_CFG, &value));
-        VTSS_I("custom SPI configuration on port %u , do Conf %s hi_clk_cycs %u lo_clk_cycs %u\n",port_no,conf->tx_fifo_spi_conf ? "TRUE" : "NO", conf->tx_fifo_hi_clk_cycs,conf->tx_fifo_lo_clk_cycs);
+                                      VTSS_PTP_TS_FIFO_SI_TS_FIFO_SI_CFG, &value));
+        VTSS_I("custom SPI configuration on port %u , do Conf %s hi_clk_cycs %u lo_clk_cycs %u\n", port_no, conf->tx_fifo_spi_conf ? "TRUE" : "NO", conf->tx_fifo_hi_clk_cycs, conf->tx_fifo_lo_clk_cycs);
     }
 
 #ifdef VTSS_CHIP_10G_PHY
@@ -3556,6 +3606,9 @@ vtss_rc vtss_phy_ts_csr_set_priv(vtss_state_t *vtss_state,
 {
     vtss_rc      rc = VTSS_RC_OK;
     u32          w_mask, mask, value = 0, ingr_latency = 0, egr_latency = 0;
+#if defined(VTSS_FEATURE_MACSEC)
+    u32          temp_value = 0;
+#endif
     i32 svalue;
     vtss_timeinterval_t ti;
     BOOL         enable = FALSE;
@@ -3841,16 +3894,63 @@ vtss_rc vtss_phy_ts_csr_set_priv(vtss_state_t *vtss_state,
             /* ENABLE :: disable the bypass mode in the timestamp processor */
             /* For Gen1 VTSS_F_PTP_IP_1588_TOP_CFG_STAT_INTERFACE_CTL_BYPASS */
             value = VTSS_PHY_TS_CLR_BITS(value, VTSS_F_PTP_IP_1588_TOP_CFG_STAT_INTERFACE_CTL_EGR_BYPASS);
+#ifdef VTSS_CHIP_CU_PHY
+#if defined(TESLA_ING_TS_ERRFIX)
+            if (!vtss_state->phy_ts_port_conf[port_no].oos_recovery_active)
+            {
+                BOOL  oos_recov_enabled = FALSE;
+
+                switch (phy_type) {
+                case VTSS_PHY_TYPE_8574:
+                case VTSS_PHY_TYPE_8572:
+                    /* Check Reg30.13 for HW bit set or not */
+                    oos_recov_enabled = vtss_phy_ts_is_oos_recovery_enabled_private(vtss_state, port_no);
+                    break;
+                default:
+                    oos_recov_enabled = FALSE;
+                }
+
+                if (oos_recov_enabled) {
+                    vtss_phy_ts_fifo_conf_t   fifo_conf_tesla;
+                    BOOL                      OOS = FALSE;
+                    vtss_debug_printf_t       func_printf = (vtss_debug_printf_t)printf;
+                    vtss_rc                   rc=0;
+
+                   VTSS_RC(vtss_phy_default_fifo_conf_tesla_oos_get(vtss_state, port_no, &fifo_conf_tesla));
+
+#ifdef VTSS_TS_FIFO_SYNC_MINIMIZE_OUTPUT
+                   func_printf = dummy_printf;
+#else
+                   func_printf = (vtss_debug_printf_t)printf;
+#endif
+                   if (!vtss_state->sync_calling_private) {
+                       VTSS_I("VTSS_PHY_SYNC: Calling Tesla OOS Recovery,  port %u, ", port_no);
+    
+                       vtss_state->rd_ts_fifo = TRUE;
+                       if ((rc = vtss_phy_ts_tesla_tsp_fifo_sync_private(vtss_state, port_no, func_printf, &fifo_conf_tesla, &OOS)) != VTSS_RC_OK) {
+                           VTSS_E("TESLA TSP_FIFO SYNC Failed. port_no: %d, OOS = %u\n", port_no, OOS);
+                       }
+
+                       vtss_state->rd_ts_fifo = FALSE;
+                   }
+
+                   if (OOS) {
+                       VTSS_I("VTSS_PHY_TS_PORT_ENA_SET:: Tesla OOS Recovery failure,  port %u, OOS: %u", port_no, OOS);
+                   }
+               }
+            }
+#endif
+#endif
         } else {
 
             /* If MACsec is enabled and bypass set is performed on live traffic then 1588 can go OOS */
 #if defined(VTSS_FEATURE_MACSEC)
             if (vtss_state->phy_ts_port_conf[port_no].is_gen2 == TRUE) {
-                VTSS_RC(VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0), VTSS_PTP_IP_1588_TOP_CFG_STAT_MODE_CTL, &value));
-                if(VTSS_X_PTP_IP_1588_TOP_CFG_STAT_MODE_CTL_PROTOCOL_MODE(value) == 4){
+                VTSS_RC(VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0), VTSS_PTP_IP_1588_TOP_CFG_STAT_MODE_CTL, &temp_value));
+                if(VTSS_X_PTP_IP_1588_TOP_CFG_STAT_MODE_CTL_PROTOCOL_MODE(temp_value) == 4){
 
                     VTSS_RC(vtss_phy_ts_version_check(vtss_state, port_no, &new_revision));
-                    if(new_revision == FALSE){
+                    if (new_revision == FALSE) {
                         VTSS_I("Warning: MAC's are enabled, Setting 1588 Bypass can cause 1588 to go Out Of Sync Port no: %u\n", port_no);
                     }
                 }
@@ -3859,6 +3959,10 @@ vtss_rc vtss_phy_ts_csr_set_priv(vtss_state_t *vtss_state,
             /* DISABLE :: enable the bypass mode in the timestamp processor */
             value |= VTSS_F_PTP_IP_1588_TOP_CFG_STAT_INTERFACE_CTL_EGR_BYPASS;
         }
+        /* Bit 6 :: CLK_ENA = 1, CLK_DIS = 0,   Init:CLK_ENA
+         * Bit 2 :: BYPASS_DIS  = 0, BYPASS_ENA = 1, Init:BYPASS_ENA
+         * Bit 1:0 :: MII protocol : 0 XGMII-64
+         */
         /* update the interface control register */
         VTSS_RC(VTSS_PHY_TS_WRITE_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0),
                                       VTSS_PTP_IP_1588_TOP_CFG_STAT_INTERFACE_CTL, &value));
@@ -5429,6 +5533,10 @@ vtss_rc vtss_phy_ts_macsec_mode_change (vtss_state_t                      *vtss_
         VTSS_RC(VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0),
                                      VTSS_PTP_IP_1588_TOP_CFG_STAT_INTERFACE_CTL, &value));
         value &= ~VTSS_M_PTP_IP_1588_TOP_CFG_STAT_INTERFACE_CTL_MII_PROTOCOL ;
+        /* Bit 6 :: CLK_ENA = 1, CLK_DIS = 0,   Init:CLK_ENA
+         * Bit 2 :: BYPASS_DIS  = 0, BYPASS_ENA = 1, Init:BYPASS_ENA
+         * Bit 1:0 :: MII protocol : 0 XGMII-64
+         */
         value |= mii_protocol;
         VTSS_RC(VTSS_PHY_TS_WRITE_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0),
                                       VTSS_PTP_IP_1588_TOP_CFG_STAT_INTERFACE_CTL, &value));
@@ -5512,6 +5620,56 @@ static vtss_rc vtss_phy_daisy_conf_set_private(vtss_state_t          *vtss_state
     return VTSS_RC_OK;
 }
 #endif //#ifdef VTSS_CHIP_CU_PHY
+
+static vtss_rc vtss_phy_ts_flow_clear_cf_set_priv(vtss_state_t                          *vtss_state,
+                                                  BOOL                                  ingress,
+                                                  vtss_port_no_t                        port_no,
+                                                  vtss_port_no_t                        base_port_no,
+                                                  vtss_phy_ts_engine_t                  eng_id,
+                                                  u8                                    act_id,
+                                                  const vtss_phy_ts_ptp_message_type_t  msgtype)
+{
+    vtss_phy_ts_blk_id_t            blk_id;
+    u32                             loop_var = 0, value = 0;
+    vtss_phy_ts_eng_conf_t          *eng_conf;
+    vtss_phy_ts_ptp_engine_action_t *ptp_action_conf;
+    vtss_phy_ts_ptp_message_type_t   tmpmsgtype;
+
+    if (ingress) {
+        eng_conf = &vtss_state->phy_ts_port_conf[base_port_no].ingress_eng_conf[eng_id];
+    } else {
+        eng_conf = &vtss_state->phy_ts_port_conf[base_port_no].egress_eng_conf[eng_id];
+    }
+
+    ptp_action_conf = &eng_conf->action_conf.action.ptp_conf[act_id];
+    if (!((ptp_action_conf->clk_mode == VTSS_PHY_TS_PTP_CLOCK_MODE_BC1STEP) ||
+          (ptp_action_conf->clk_mode == VTSS_PHY_TS_PTP_CLOCK_MODE_BC2STEP))) {
+        VTSS_E("Correction field can only be cleared for OC/BC clocks port %u \n", port_no);
+        return VTSS_RC_ERROR;
+    }
+
+    VTSS_RC(vtss_phy_ts_ana_blk_id_get(eng_id, ingress, &blk_id));
+    for (loop_var = 0; loop_var < 6; loop_var++) {
+        if (eng_conf->action_flow_map[loop_var] == (act_id + 1)) {
+            VTSS_RC(VTSS_PHY_TS_READ_CSR(port_no, blk_id,
+                                         VTSS_ANA_PTP_FLOW_PTP_FLOW_MATCH_UPPER(loop_var), &value));
+            value &= 0x0F000000;
+            tmpmsgtype = value >> 24;
+            if (tmpmsgtype == msgtype) {
+                /* clear frame bytes */
+                value = VTSS_F_ANA_PTP_FLOW_PTP_ZERO_FIELD_CTL_PTP_ZERO_FIELD_OFFSET(8);
+                value |= VTSS_F_ANA_PTP_FLOW_PTP_ZERO_FIELD_CTL_PTP_ZERO_FIELD_BYTE_CNT(8);
+                VTSS_RC(VTSS_PHY_TS_WRITE_CSR(port_no, blk_id,
+                                              VTSS_ANA_PTP_FLOW_PTP_ZERO_FIELD_CTL(loop_var), &value));
+                return VTSS_RC_OK;
+            }
+        }
+    }
+    VTSS_E("Flow not found on port %u with engine id %u action id %u and message type %u\n",
+           port_no, eng_id, act_id, msgtype);
+    return VTSS_RC_ERROR;
+
+}
 /* ================================================================= *
  *  Public functions
  * ================================================================= */
@@ -8491,7 +8649,25 @@ static vtss_rc vtss_phy_ts_eth1_conf_priv(
         }
     }
 
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+    /* OOS Tesla OOS Recovery */
+    BOOL local_warm_start_cur = vtss_state->warm_start_cur;
+    BOOL oos_recov_enabled = vtss_phy_ts_is_oos_recovery_enabled_private(vtss_state, port_no);
+
+    /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so Eth1 Flow can be reconfigured */
+    if (oos_recov_enabled && vtss_state->warm_start_cur) {
+       vtss_state->warm_start_cur = FALSE;
+    }
+
     VTSS_RC(VTSS_RC_COLD(vtss_phy_ts_eth1_flow_conf_set_priv(vtss_state, eng_parm, eng_conf, new_flow_conf)));
+
+    if (oos_recov_enabled) {
+       vtss_state->warm_start_cur = local_warm_start_cur;
+    }
+#else
+    VTSS_RC(VTSS_RC_COLD(vtss_phy_ts_eth1_flow_conf_set_priv(vtss_state, eng_parm, eng_conf, new_flow_conf)));
+#endif
+
     return VTSS_RC_OK;
 }
 
@@ -9625,7 +9801,27 @@ static vtss_rc vtss_phy_ts_ip1_conf_priv(
         (eng_id == VTSS_PHY_TS_OAM_ENGINE_ID_2B)) {
         return VTSS_RC_ERROR;
     }
+
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+    /* OOS Tesla OOS Recovery */
+    BOOL local_warm_start_cur = vtss_state->warm_start_cur;
+    BOOL oos_recov_enabled = vtss_phy_ts_is_oos_recovery_enabled_private(vtss_state, eng_parm->port_no);
+
+    /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so Eth1 Flow can be reconfigured */
+    if (oos_recov_enabled && vtss_state->warm_start_cur) {
+       vtss_state->warm_start_cur = FALSE;
+    }
+
     VTSS_RC(VTSS_RC_COLD(vtss_phy_ts_ip1_flow_conf_set_priv(vtss_state, eng_parm, double_ip, eng_conf, new_flow_conf)));
+
+    if (oos_recov_enabled) {
+       vtss_state->warm_start_cur = local_warm_start_cur;
+    }
+
+#else
+    VTSS_RC(VTSS_RC_COLD(vtss_phy_ts_ip1_flow_conf_set_priv(vtss_state, eng_parm, double_ip, eng_conf, new_flow_conf)));
+#endif
+
     return VTSS_RC_OK;
 }
 
@@ -10386,6 +10582,12 @@ static vtss_rc vtss_phy_ts_engine_init_priv(
     BOOL is_gen2 = vtss_state->phy_ts_port_conf[port_no].is_gen2;
     BOOL is_eng2a = (eng_id == VTSS_PHY_TS_OAM_ENGINE_ID_2A) ? TRUE : FALSE;
     BOOL is_eng_used = FALSE;
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+    /* OOS Tesla OOS Recovery */
+    BOOL local_warm_start_cur = vtss_state->warm_start_cur;
+    BOOL oos_recov_enabled = vtss_phy_ts_is_oos_recovery_enabled_private(vtss_state, port_no);
+#endif
+
     vtss_phy_ts_eth_conf_t      ts_any_eth_conf;
     VTSS_N("Port: %u engine: %u:: Init", (u32)port_no, (u32)eng_id);
     if (vtss_state->phy_ts_port_conf[port_no].port_ts_init_done == FALSE) {
@@ -10535,6 +10737,7 @@ static vtss_rc vtss_phy_ts_engine_init_priv(
         VTSS_E("eng (%d) already used for port %u", eng_id, port_no);
         return VTSS_RC_ERROR;
     }
+
     /* Make sure flow is not overlap between engine 2A and 2B */
     if (eng_id == VTSS_PHY_TS_OAM_ENGINE_ID_2A ||
         eng_id == VTSS_PHY_TS_OAM_ENGINE_ID_2B) {
@@ -10575,12 +10778,43 @@ static vtss_rc vtss_phy_ts_engine_init_priv(
         } else {
             /* This is the place where the alt_eng is not enabled and the current
                        * engine is also not setup so clear the PTP/OAM Comparator flows here */
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+            /* OOS Tesla OOS Recovery */
+            /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so Eth1 Flow can be reconfigured */
+            if (oos_recov_enabled && vtss_state->warm_start_cur) {
+                vtss_state->warm_start_cur = FALSE;
+            }
+
             VTSS_RC(VTSS_RC_COLD(vtss_phy_ts_action_flow_init(vtss_state, port_no, blk_id, eng_id)));
+
+            if (oos_recov_enabled) {
+                vtss_state->warm_start_cur = local_warm_start_cur;
+            }
+#else
+            VTSS_RC(VTSS_RC_COLD(vtss_phy_ts_action_flow_init(vtss_state, port_no, blk_id, eng_id)));
+#endif
+
         }
     } else {
-        /* This is the place where the application has called for ENGINE_0 or ENGINE_1
-                * so clear the PTP/OAM comparator flows here */
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+        /* OOS Tesla OOS Recovery */
+        /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so PTP Flows can be reconfigured */
+        /* This is the place where the application has called for ENGINE_0 or ENGINE_1, */
+        /* so clear the PTP/OAM comparator flows here */
+        if (oos_recov_enabled && vtss_state->warm_start_cur) {
+            vtss_state->warm_start_cur = FALSE;
+        }
+
         VTSS_RC(VTSS_RC_COLD(vtss_phy_ts_action_flow_init(vtss_state, port_no, blk_id, eng_id)));
+
+        if (oos_recov_enabled) {
+            vtss_state->warm_start_cur = local_warm_start_cur;
+        }
+#else
+        /* This is the place where the application has called for ENGINE_0 or ENGINE_1, */
+        /* so clear the PTP/OAM comparator flows here */
+        VTSS_RC(VTSS_RC_COLD(vtss_phy_ts_action_flow_init(vtss_state, port_no, blk_id, eng_id)));
+#endif
     }
 
     /* In gen-1 Phys, flow match should be same in ingress and egress for same engine ID */
@@ -10610,8 +10844,24 @@ static vtss_rc vtss_phy_ts_engine_init_priv(
     base_port_eng_conf->flow_st_index = flow_st_index;
     base_port_eng_conf->flow_end_index = flow_end_index;
 
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+        /* OOS Tesla OOS Recovery */
+        /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so Flows can be reconfigured */
+        /* set the engine flow match mode */
+        if (oos_recov_enabled && vtss_state->warm_start_cur) {
+            vtss_state->warm_start_cur = FALSE;
+        }
+
+        /* set the engine flow match mode */
+        VTSS_RC(VTSS_RC_COLD(vtss_phy_ts_flow_match_mode_set_priv(vtss_state, port_no, eng_id, flow_match_mode, ingress)));
+
+        if (oos_recov_enabled) {
+            vtss_state->warm_start_cur = local_warm_start_cur;
+        }
+#else
     /* set the engine flow match mode */
     VTSS_RC(VTSS_RC_COLD(vtss_phy_ts_flow_match_mode_set_priv(vtss_state, port_no, eng_id, flow_match_mode, ingress)));
+#endif
 
     flow_conf = &base_port_eng_conf->flow_conf;
     action_conf = &base_port_eng_conf->action_conf;
@@ -10629,14 +10879,47 @@ static vtss_rc vtss_phy_ts_engine_init_priv(
         /* PTP allows only in PTP engine */
         /* next comp: PTP */
 
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+        /* OOS Tesla OOS Recovery - Only applies to ETH-PTP and ETH-IP-PTP */
+        /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so Flows can be reconfigured */
+        /* set the engine flow match mode */
+        if (oos_recov_enabled && vtss_state->warm_start_cur) {
+            vtss_state->warm_start_cur = FALSE;
+        }
+
+        /* set the engine flow match mode */
         rc = VTSS_RC_COLD(vtss_phy_ts_eth1_next_comp_etype_set_priv(vtss_state, port_no, blk_id,
                                                                     eng_id, VTSS_PHY_TS_NEXT_COMP_PTP_OAM, 0x88F7));
+        if (oos_recov_enabled) { 
+            vtss_state->warm_start_cur = local_warm_start_cur; 
+        }
+#else
+        rc = VTSS_RC_COLD(vtss_phy_ts_eth1_next_comp_etype_set_priv(vtss_state, port_no, blk_id,
+                                                                    eng_id, VTSS_PHY_TS_NEXT_COMP_PTP_OAM, 0x88F7));
+#endif
         if (rc != VTSS_RC_OK) {
             break;
         }
+
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+        /* OOS Tesla OOS Recovery - Only applies to ETH-PTP and ETH-IP-PTP */
+        /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so Flows can be reconfigured */
+        /* set the engine flow match mode */
+        if (oos_recov_enabled && vtss_state->warm_start_cur) {
+            vtss_state->warm_start_cur = FALSE;
+        }
+
         /* set eth1 conf */
         rc = VTSS_RC_COLD(vtss_phy_ts_eth1_def_conf_priv(vtss_state, eng_parm,
                                                          &vtss_phy_ts_def_inner_eth_conf_for_ptp));
+        if (oos_recov_enabled) {
+            vtss_state->warm_start_cur = local_warm_start_cur;
+        }
+#else
+        /* set eth1 conf */
+        rc = VTSS_RC_COLD(vtss_phy_ts_eth1_def_conf_priv(vtss_state, eng_parm,
+                                                         &vtss_phy_ts_def_inner_eth_conf_for_ptp));
+#endif
         if (rc != VTSS_RC_OK) {
             break;
         }
@@ -10661,14 +10944,49 @@ static vtss_rc vtss_phy_ts_engine_init_priv(
     case VTSS_PHY_TS_ENCAP_ETH_IP_PTP:
         /* No OAM engine for this encap type */
         /* set eth next comparator */
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+        /* OOS Tesla OOS Recovery - Only applies to ETH-PTP and ETH-IP-PTP */
+        /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so Flows can be reconfigured */
+        /* set the engine flow match mode */
+        if (oos_recov_enabled && vtss_state->warm_start_cur) {
+            vtss_state->warm_start_cur = FALSE;
+        }
+
+        /* set the engine flow match mode */
         rc = VTSS_RC_COLD(vtss_phy_ts_eth1_next_comp_etype_set_priv(vtss_state, port_no, blk_id,
                                                                     eng_id, VTSS_PHY_TS_NEXT_COMP_IP1, 0x0800));
+
+        if (oos_recov_enabled) {
+            vtss_state->warm_start_cur = local_warm_start_cur;
+        }
+#else
+        rc = VTSS_RC_COLD(vtss_phy_ts_eth1_next_comp_etype_set_priv(vtss_state, port_no, blk_id,
+                                                                    eng_id, VTSS_PHY_TS_NEXT_COMP_IP1, 0x0800));
+#endif
         if (rc != VTSS_RC_OK) {
             break;
         }
+
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+        /* OOS Tesla OOS Recovery - Only applies to ETH-PTP and ETH-IP-PTP */
+        /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so Flows can be reconfigured */
+        /* set the engine flow match mode */
+        if (oos_recov_enabled && vtss_state->warm_start_cur) {
+            vtss_state->warm_start_cur = FALSE;
+        }
+
         /* set eth1 conf */
         rc = VTSS_RC_COLD(vtss_phy_ts_eth1_def_conf_priv(vtss_state, eng_parm,
                                                          &vtss_phy_ts_def_inner_eth_conf_for_ptp));
+
+        if (oos_recov_enabled) {
+            vtss_state->warm_start_cur = local_warm_start_cur;
+        }
+#else
+        /* set eth1 conf */
+        rc = VTSS_RC_COLD(vtss_phy_ts_eth1_def_conf_priv(vtss_state, eng_parm,
+                                                         &vtss_phy_ts_def_inner_eth_conf_for_ptp));
+#endif
         if (rc != VTSS_RC_OK) {
             break;
         }
@@ -10682,15 +11000,49 @@ static vtss_rc vtss_phy_ts_engine_init_priv(
                sizeof(vtss_phy_ts_def_inner_eth_conf_for_ptp.flow_opt[0]));
         flow_conf->flow_conf.ptp.eth1_opt.comm_opt.etype = 0x0800;
 
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+        /* OOS Tesla OOS Recovery - Only applies to ETH-PTP and ETH-IP-PTP */
+        /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so Flows can be reconfigured */
+        /* set the engine flow match mode */
+        if (oos_recov_enabled && vtss_state->warm_start_cur) {
+            vtss_state->warm_start_cur = FALSE;
+        }
+
         /* set IP next comparator: PTP */
         rc = VTSS_RC_COLD(vtss_phy_ts_ip1_next_comp_set_priv(vtss_state, port_no, blk_id,
                                                              VTSS_PHY_TS_NEXT_COMP_PTP_OAM, 28));
+
+        if (oos_recov_enabled) {
+            vtss_state->warm_start_cur = local_warm_start_cur;
+        }
+#else
+        /* set IP next comparator: PTP */
+        rc = VTSS_RC_COLD(vtss_phy_ts_ip1_next_comp_set_priv(vtss_state, port_no, blk_id,
+                                                             VTSS_PHY_TS_NEXT_COMP_PTP_OAM, 28));
+#endif
         if (rc != VTSS_RC_OK) {
             break;
         }
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+        /* OOS Tesla OOS Recovery - Only applies to ETH-PTP and ETH-IP-PTP */
+        /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so Flows can be reconfigured */
+        /* set the engine flow match mode */
+        if (oos_recov_enabled && vtss_state->warm_start_cur) {
+            vtss_state->warm_start_cur = FALSE;
+        }
+
         /* set IP1 conf */
         rc = VTSS_RC_COLD(vtss_phy_ts_ip1_def_conf_priv(vtss_state, eng_parm, FALSE,
                                                         &vtss_phy_ts_def_inner_ip_conf));
+
+        if (oos_recov_enabled) {
+            vtss_state->warm_start_cur = local_warm_start_cur;
+        }
+#else
+        /* set IP1 conf */
+        rc = VTSS_RC_COLD(vtss_phy_ts_ip1_def_conf_priv(vtss_state, eng_parm, FALSE,
+                                                        &vtss_phy_ts_def_inner_ip_conf));
+#endif
         if (rc != VTSS_RC_OK) {
             break;
         }
@@ -10702,7 +11054,21 @@ static vtss_rc vtss_phy_ts_engine_init_priv(
                sizeof(vtss_phy_ts_def_inner_ip_conf.flow_opt[0]));
         /* signature mask config */
         if (ingress == FALSE) {
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+            /* OOS Tesla OOS Recovery - Only applies to ETH-PTP and ETH-IP-PTP */
+            /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so Flows can be reconfigured */
+            if (oos_recov_enabled && vtss_state->warm_start_cur) {
+                vtss_state->warm_start_cur = FALSE;
+            }
+
             rc = VTSS_RC_COLD(vtss_phy_ts_ip1_sig_mask_set_priv(vtss_state, port_no, eng_id, blk_id));
+
+            if (oos_recov_enabled) {
+                vtss_state->warm_start_cur = local_warm_start_cur;
+            }
+#else
+            rc = VTSS_RC_COLD(vtss_phy_ts_ip1_sig_mask_set_priv(vtss_state, port_no, eng_id, blk_id));
+#endif
         }
         memset(action_conf, 0, sizeof(vtss_phy_ts_engine_action_t));
         action_conf->action_ptp = TRUE;
@@ -12177,8 +12543,25 @@ vtss_rc vtss_phy_ts_ingress_engine_clear(const vtss_inst_t  inst,
         }
 
         VTSS_PHY_TS_SPI_PAUSE_COLD(port_no);
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+        /* OOS Tesla OOS Recovery - If Warmstart, Override to ensure Tesla OOS Config is overwritten */
+        BOOL local_warm_start_cur = vtss_state->warm_start_cur;
+        BOOL oos_recov_enabled = vtss_phy_ts_is_oos_recovery_enabled_private(vtss_state, port_no);
+        /* OOS Tesla OOS Recovery - Only applies to ETH-PTP and ETH-IP-PTP */
+        /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so Flows can be reconfigured */
+        if (oos_recov_enabled && vtss_state->warm_start_cur) {
+            vtss_state->warm_start_cur = FALSE;
+        }
+#endif
+
         rc = VTSS_RC_COLD(vtss_phy_ts_engine_clear_priv(vtss_state, TRUE, port_no,
                                                         bport, eng_id));
+
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+        if (oos_recov_enabled) {
+            vtss_state->warm_start_cur = local_warm_start_cur;
+        }
+#endif
 
         /* clear the engine config */
         memset(flow_conf, 0, sizeof(vtss_phy_ts_engine_flow_conf_t));
@@ -12368,8 +12751,26 @@ vtss_rc vtss_phy_ts_egress_engine_clear(const vtss_inst_t  inst,
         }
 
         VTSS_PHY_TS_SPI_PAUSE_COLD(port_no);
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+        /* OOS Tesla OOS Recovery - If Warmstart, Override to ensure Tesla OOS Config is overwritten */
+        BOOL local_warm_start_cur = vtss_state->warm_start_cur;
+        BOOL oos_recov_enabled = vtss_phy_ts_is_oos_recovery_enabled_private(vtss_state, port_no);
+        /* OOS Tesla OOS Recovery - Only applies to ETH-PTP and ETH-IP-PTP */
+        /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so Flows can be reconfigured */
+        if (oos_recov_enabled && vtss_state->warm_start_cur) {
+            vtss_state->warm_start_cur = FALSE;
+        }
+#endif
+
         rc = VTSS_RC_COLD(vtss_phy_ts_engine_clear_priv(vtss_state, FALSE, port_no,
                                                         bport, eng_id));
+
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+        if (oos_recov_enabled) {
+            vtss_state->warm_start_cur = local_warm_start_cur;
+        }
+#endif
+
         /* clear the engine config */
         memset(flow_conf, 0, sizeof(vtss_phy_ts_engine_flow_conf_t));
         eng_conf->eng_used = FALSE;
@@ -12441,6 +12842,19 @@ static vtss_rc vtss_phy_ts_engine_config_priv(
            if either of the engine is enable, disable the whole OAM engine */
         /* do the typecast to make lint happy! */
         temp &= ((eng_id < VTSS_PHY_TS_OAM_ENGINE_ID_2A) ? ~((u32)0x01 << eng_id) : ~((u32)0x01 << VTSS_PHY_TS_OAM_ENGINE_ID_2A));
+#ifdef TESLA_ING_TS_ERRFIX
+        /* OOS Tesla OOS Recovery */
+        BOOL oos_recov_enabled = vtss_phy_ts_is_oos_recovery_enabled_private(vtss_state, port_no);
+
+        /* Over-ride and disable Eng2 if Warm-Start Flag and if OOS Recovery was active during warmstart */
+        /* Eng0 is hard-coded as the Engine used for OOS Recovery */
+        /* The Analyzer_Mode needs to be changed and Eng2 Disabled */
+        if ((eng_id < VTSS_PHY_TS_OAM_ENGINE_ID_2A) && oos_recov_enabled && vtss_state->warm_start_cur) {
+            temp &=  ~((u32)0x01 << VTSS_PHY_TS_OAM_ENGINE_ID_2A);
+            VTSS_I(" WarmStart & oos_recov needed Port_no: %d, FORCING ANA_MODE Engine[2]:Disabled \n", port_no );
+        }
+#endif
+
     }
     if (ingress) {
         temp = VTSS_F_PTP_IP_1588_TOP_CFG_STAT_ANALYZER_MODE_INGR_ENCAP_ENGINE_ENA(temp);
@@ -12481,7 +12895,24 @@ static vtss_rc vtss_phy_ts_engine_flow_set_priv(
        if either of the engine is enable, disable the whole OAM engine */
     if (eng_conf->flow_conf.eng_mode ||
         (alt_eng_conf && alt_eng_conf->flow_conf.eng_mode)) {
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+        /* OOS Tesla OOS Recovery - If Warmstart, Override to ensure Tesla OOS Config is overwritten */
+        BOOL local_warm_start_cur = vtss_state->warm_start_cur;
+        /* OOS Tesla OOS Recovery */
+        BOOL oos_recov_enabled = vtss_phy_ts_is_oos_recovery_enabled_private(vtss_state, port_no);
+        /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so Flows can be reconfigured */
+        if (oos_recov_enabled && vtss_state->warm_start_cur) {
+            vtss_state->warm_start_cur = FALSE;
+        }
+#endif
+
         VTSS_RC(VTSS_RC_COLD(vtss_phy_ts_engine_config_priv(vtss_state, ingress, port_no, eng_id, FALSE)));
+
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+        if (oos_recov_enabled) {
+            vtss_state->warm_start_cur = local_warm_start_cur;
+        }
+#endif
     }
 
     switch (eng_conf->encap_type) {
@@ -15038,6 +15469,19 @@ static vtss_rc vtss_phy_ts_engine_ptp_action_add_priv(
         VTSS_I("Empty flows not sufficient to add action\n");
         return VTSS_RC_ERROR;
     }
+
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+    /* OOS Tesla OOS Recovery - If Warmstart, Override to ensure Tesla OOS Config is overwritten */
+    BOOL local_warm_start_cur = vtss_state->warm_start_cur;
+    /* OOS Tesla OOS Recovery */
+    BOOL oos_recov_enabled = vtss_phy_ts_is_oos_recovery_enabled_private(vtss_state, port_no);
+    /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so Flows can be reconfigured */
+    if (oos_recov_enabled && vtss_state->warm_start_cur) {
+        vtss_state->warm_start_cur = FALSE;
+        VTSS_I("WARMSTART OVER-RIDE: PTP Flow-Add Action\n");
+    }
+#endif
+
     if (action_conf->clk_mode == VTSS_PHY_TS_PTP_CLOCK_MODE_BC1STEP &&
         action_conf->delaym_type == VTSS_PHY_TS_PTP_DELAYM_E2E) {
         VTSS_RC(VTSS_RC_COLD(vtss_phy_ts_engine_ptp_action_flow_add_priv(vtss_state, ingress,
@@ -15142,6 +15586,12 @@ static vtss_rc vtss_phy_ts_engine_ptp_action_add_priv(
         eng_conf->action_flow_map[flow_index[3]] = action_index + 1;
 #endif /* VTSS_FEATURE_PTP_DELAY_COMP_ENGINE */
     }
+
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+    if (oos_recov_enabled) {
+        vtss_state->warm_start_cur = local_warm_start_cur;
+    }
+#endif
 
     return VTSS_RC_OK;
 }
@@ -15490,6 +15940,11 @@ static vtss_rc vtss_phy_ts_engine_action_set_priv(
     vtss_phy_ts_engine_action_t  *old_action_conf;
     vtss_phy_ts_eng_conf_t *alt_eng_conf = NULL;
 
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+    BOOL local_warm_start_cur = vtss_state->warm_start_cur;
+    BOOL oos_recov_enabled = vtss_phy_ts_is_oos_recovery_enabled_private(vtss_state, port_no);
+#endif
+
     old_action_conf = &eng_conf->action_conf;
     VTSS_RC(vtss_phy_ts_ana_blk_id_get(eng_id, ingress, &blk_id));
 
@@ -15525,6 +15980,16 @@ static vtss_rc vtss_phy_ts_engine_action_set_priv(
         alt_eng_conf = (ingress ? &vtss_state->phy_ts_port_conf[base_port_no].ingress_eng_conf[VTSS_PHY_TS_OAM_ENGINE_ID_2A] :
                         &vtss_state->phy_ts_port_conf[base_port_no].egress_eng_conf[VTSS_PHY_TS_OAM_ENGINE_ID_2A]);
     }
+
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+    /* OOS Tesla OOS Recovery */
+    local_warm_start_cur = vtss_state->warm_start_cur;
+    /* Over-ride Warm-Start Flag if OOS Recovery was active during warmstart so Eth1 Flow can be reconfigured */
+    if (oos_recov_enabled && vtss_state->warm_start_cur) {
+        vtss_state->warm_start_cur = FALSE;
+    }
+#endif
+
     /* Disable the engine before changing the engine conf: for engine 2A or 2B
        if either of the engine is enable, disable the whole OAM engine */
     if (eng_conf->flow_conf.eng_mode ||
@@ -15627,6 +16092,12 @@ static vtss_rc vtss_phy_ts_engine_action_set_priv(
 
         VTSS_RC(VTSS_RC_COLD(vtss_phy_ts_engine_config_priv(vtss_state, ingress, port_no, eng_id, TRUE)));
     }
+
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+    if (oos_recov_enabled) {
+        vtss_state->warm_start_cur = local_warm_start_cur;
+    }
+#endif
 
     return VTSS_RC_OK;
 }
@@ -16137,6 +16608,9 @@ vtss_rc vtss_phy_ts_init(const vtss_inst_t               inst,
     vtss_port_no_t           base_port_no;
     vtss_phy_ts_init_conf_t  base_conf;
     u16                      revision = 0;
+#ifdef VTSS_CHIP_CU_PHY
+    u32                      value = 0;
+#endif
 
 #if defined(VTSS_CHIP_CU_PHY) && defined(VTSS_PHY_TS_SPI_CLK_THRU_PPS0)
     u16     channel_id;
@@ -16425,6 +16899,19 @@ vtss_rc vtss_phy_ts_init(const vtss_inst_t               inst,
                 vtss_state->phy_ts_port_conf[port_no].eng_init_done = TRUE;
             }
 
+            /* Tesla Rev E needs these values to be configured with fixed values */
+            if (revision >= VTSS_PHY_TESLA_REV_E) {
+                VTSS_RC(VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0),
+                                             VTSS_PTP_TS_FIFO_SI_TS_FIFO_SI_CFG, &value));
+                /* clearing bitfeilds SI_CLK_HI_CYCS(10:6),SI_CLK_LO_CYCS(5:1) */
+                value = VTSS_PHY_TS_CLR_BITS(value, 0x7fe);
+                value |= VTSS_F_PTP_TS_FIFO_SI_TS_FIFO_SI_CFG_SI_CLK_HI_CYCS(3);
+                value |= VTSS_F_PTP_TS_FIFO_SI_TS_FIFO_SI_CFG_SI_CLK_LO_CYCS(1);
+                VTSS_RC(VTSS_PHY_TS_WRITE_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0),
+                                              VTSS_PTP_TS_FIFO_SI_TS_FIFO_SI_CFG, &value));
+                VTSS_I("Overwriting Push-SPI config for Tesla E on port %u ,CLK_HI_CYCS = 3, CLK_LO_CYCS = 1\n", port_no);
+            }
+
             /* Set the PHY latency for Tesla, for 10G it is not reqd */
             if ((rc = vtss_phy_ts_phy_latency_set_priv(vtss_state, port_no)) != VTSS_RC_OK) {
                 VTSS_E("1588 PHY Latency config fail!, port_no %u", port_no);
@@ -16702,12 +17189,19 @@ vtss_rc vtss_phy_ts_spi_pause_priv(vtss_state_t *vtss_state, const vtss_port_no_
     vtss_state->phy_ts_state.is_spi_paused = FALSE;
     vtss_state->phy_ts_state.spi_prev_status = 0;
 
+#if 0
+// This is being commented out for the case of power-down
+// We really want the SPI Pause to occur for POWER DOWN`
+// See implementation in API 4.49a
 #if defined(TESLA_ING_TS_ERRFIX)
     if ((vtss_state->ts_csr_thr_mm) && (!vtss_state->rd_ts_fifo)) {
         /* Using Middle Man (8051) to access 1588 registers */
         return VTSS_RC_OK;
     }
 #endif
+#endif
+
+    VTSS_I(" vtss_phy_ts_spi_pause_priv:  Executing SPI Pause for port_no: %d\n", port_no);
 
     blk_id = VTSS_PHY_TS_CHANNEL_TO_BLK_ID(vtss_state->phy_ts_port_conf[port_no].new_spi_conf.channel_id);
     /* Change to GPIO page */
@@ -19718,11 +20212,13 @@ static vtss_rc vtss_phy_ts_engine_encap_conf_sync_priv(
             *encap_type = VTSS_PHY_TS_ENCAP_ETH_MPLS_ACH_PTP;
         }
         /* Workaround for hardware bug in IP comparator. Bug#22863 */
-        if (ip2_nxt_comp == VTSS_PHY_TS_NEXT_COMP_RES) {
+        if (ip2_nxt_comp == VTSS_PHY_TS_NEXT_COMP_RES ||
+            ip2_nxt_comp == VTSS_PHY_TS_NEXT_COMP_PTP_OAM) {
             /* IP2 comparator is used only for PTP-IP-IP-ETH encapsulation */
             vtss_state->phy_ts_port_conf[port_no].ip2_nxt_cmp[blk_id] = VTSS_PHY_TS_NEXT_COMP_PTP_OAM;
             vtss_state->phy_ts_port_conf[port_no].ip1_nxt_cmp[blk_id] = VTSS_PHY_TS_NEXT_COMP_IP2;
-        } else if (ip1_nxt_comp == VTSS_PHY_TS_NEXT_COMP_RES) {
+        } else if (ip1_nxt_comp == VTSS_PHY_TS_NEXT_COMP_RES ||
+                   ip1_nxt_comp == VTSS_PHY_TS_NEXT_COMP_PTP_OAM) {
             vtss_state->phy_ts_port_conf[port_no].ip1_nxt_cmp[blk_id] = VTSS_PHY_TS_NEXT_COMP_PTP_OAM;
         }
     } else {
@@ -23159,8 +23655,8 @@ vtss_rc vtss_phy_ts_status_check(const vtss_inst_t inst,
 }
 #if defined(VTSS_DAYTONA_OOS_FIX) || defined(VTSS_PHY_10G_FIFO_SYNC)
 vtss_rc vtss_phy_ts_10g_extended_fifo_sync(const vtss_inst_t  inst,
-                                      const vtss_port_no_t port_no,
-                                      const vtss_phy_10g_fifo_sync_t *conf)
+                                           const vtss_port_no_t port_no,
+                                           const vtss_phy_10g_fifo_sync_t *conf)
 {
     vtss_state_t  *vtss_state;
     vtss_rc       rc = VTSS_RC_OK;
@@ -23314,8 +23810,8 @@ vtss_rc vtss_phy_ts_10g_fifo_sync_private(vtss_state_t    *vtss_state,
                 VTSS_E("Loading delays failed\n");
                 goto end_of_func;
             }
-            if(conf->bypass_in_api){
-                if((rc = vtss_phy_ts_bypass_set(vtss_state, port_no, FALSE, TRUE)) != VTSS_RC_OK) {
+            if (conf->bypass_in_api) {
+                if ((rc = vtss_phy_ts_bypass_set(vtss_state, port_no, FALSE, TRUE)) != VTSS_RC_OK) {
                     VTSS_E("Bypass disable failed\n");
                 }
             }
@@ -23401,6 +23897,599 @@ vtss_rc vtss_phy_ts_bypass_clear(const vtss_inst_t    inst,
     return rc;
 }
 
+/* *********************************************************************************************** */
+/*                                  1588_DEBUG_REG_READ                                            */
+/* *********************************************************************************************** */
+#ifdef ENABLE_1588_DEBUG_REG_READ
+
+#define VTSS_PHY_1588_PRINT_CSR(p,c,d, b, a,v,pr) \
+                      vtss_phy_ts_read_csr(vtss_state, (c), (b), (a), (v) ); \
+                      pr("%-4u %-5u %-35s 0x%04x 0x%08x\n",(p) ,(b),(d),(a),(*v) ); \
+ 
+static vtss_rc vtss_phy_ts_read_ing_ana_reg_priv(vtss_state_t *vtss_state,  const vtss_port_no_t port_no,
+                                                 const vtss_port_no_t cfg_port,
+                                                 const u32 blk_id,
+                                                 const vtss_debug_printf_t pr)
+{
+    u32     v = 0;
+    u32     i = 0;
+    /* Read ethernet first comparator:*/
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH1_NXT_PROTOCOL",         blk_id, 0x00, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH1_VLAN_TPID_CFG",        blk_id, 0x01, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH1_TAG_MODE",             blk_id, 0x02, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH1_ETYPE_MATCH",          blk_id, 0x03, &v, pr);
+
+    for ( i = 1; i <= 8; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH1_FLOW_ENABLE",            blk_id, (u16)(0x10 * i), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH1_MATCH_MODE",             blk_id, (u16)((0x10 * i) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH1_ADDR_MATCH_1",           blk_id, (u16)((0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH1_ADDR_MATCH_2",           blk_id, (u16)((0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH1_VLAN_TAG_RANGE_I_TAG",   blk_id, (u16)((0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH1_VLAN_TAG1",              blk_id, (u16)((0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH1_VLAN_TAG2_I_TAG",        blk_id, (u16)((0x10 * i) + 6), &v, pr);
+    }
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH2_NXT_PROTOCOL",         blk_id, 0x90, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH2_VLAN_TPID_CFG",        blk_id, 0x91, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH2_ETYPE_MATCH",          blk_id, 0x92, &v, pr);
+
+    for ( i = 1; i <= 8; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH2_FLOW_ENABLE",            blk_id, (u16)(0x90 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH2_MATCH_MODE",             blk_id, (u16)(0x90 + (0x10 * i) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH2_ADDR_MATCH_1",           blk_id, (u16)(0x90 + (0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH2_ADDR_MATCH_2",           blk_id, (u16)(0x90 + (0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH2_VLAN_TAG_RANGE_I_TAG",   blk_id, (u16)(0x90 + (0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH2_VLAN_TAG1",              blk_id, (u16)(0x90 + (0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_ETH2_VLAN_TAG2_I_TAG",        blk_id, (u16)(0x90 + (0x10 * i) + 6), &v, pr);
+    }
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_MPLS_NXT_COMPARATOR",         blk_id, 0x120, &v, pr);
+
+    for ( i = 1; i <= 8; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_MPLS_FLOW_CONTROL",            blk_id, (u16)(0x120 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_MPLS_LABEL_RANGE_LOWER_0",     blk_id, (u16)(0x120 + (0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_MPLS_LABEL_RANGE_UPPER_0",     blk_id, (u16)(0x120 + (0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_MPLS_LABEL_RANGE_LOWER_1",     blk_id, (u16)(0x120 + (0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_MPLS_LABEL_RANGE_UPPER_1",     blk_id, (u16)(0x120 + (0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_MPLS_LABEL_RANGE_LOWER_2",     blk_id, (u16)(0x120 + (0x10 * i) + 6), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_MPLS_LABEL_RANGE_UPPER_2",     blk_id, (u16)(0x120 + (0x10 * i) + 7), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_MPLS_LABEL_RANGE_LOWER_3",     blk_id, (u16)(0x120 + (0x10 * i) + 8), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_MPLS_LABEL_RANGE_UPPER_3",     blk_id, (u16)(0x120 + (0x10 * i) + 9), &v, pr);
+    }
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_NXT_COMPARATOR",          blk_id, 0x1B0, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_MODE",                    blk_id, 0x1B1, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_PROT_MATCH_1",            blk_id, 0x1B2, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_PROT_MATCH_2_UPPER",      blk_id, 0x1B3, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_PROT_MATCH_2_LOWER",      blk_id, 0x1B4, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_PROT_MASK_2_UPPER",       blk_id, 0x1B5, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_PROT_MASK_2_LOWER",       blk_id, 0x1B6, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_PROT_OFFSET_2",           blk_id, 0x1B7, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_UDP_CHKSUM_CFG",          blk_id, 0x1B8, &v, pr);
+
+    for ( i = 1; i <= 8; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_FLOW_ENA",            blk_id, (u16)(0x1B0 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_FLOW_MATCH_UPPER",    blk_id, (u16)(0x1B0 + (0x10 * i) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_FLOW_MATCH_UPPER_MID", blk_id, (u16)(0x1B0 + (0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_FLOW_MATCH_LOWER_MID", blk_id, (u16)(0x1B0 + (0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_FLOW_MATCH_LOWER",    blk_id, (u16)(0x1B0 + (0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_FLOW_MASK_UPPER",     blk_id, (u16)(0x1B0 + (0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_FLOW_MASK_UPPER_MID", blk_id, (u16)(0x1B0 + (0x10 * i) + 6), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_FLOW_MASK_LOWER_MID", blk_id, (u16)(0x1B0 + (0x10 * i) + 7), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP1_FLOW_MASK_LOWER",     blk_id, (u16)(0x1B0 + (0x10 * i) + 8), &v, pr);
+    }
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_NXT_COMPARATOR",          blk_id, 0x240, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_MODE",                    blk_id, 0x241, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_PROT_MATCH_1",            blk_id, 0x242, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_PROT_MATCH_2_UPPER",      blk_id, 0x243, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_PROT_MATCH_2_LOWER",      blk_id, 0x244, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_PROT_MASK_2_UPPER",       blk_id, 0x245, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_PROT_MASK_2_LOWER",       blk_id, 0x246, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_PROT_OFFSET_2",           blk_id, 0x247, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_UDP_CHKSUM_CFG",          blk_id, 0x248, &v, pr);
+
+    for ( i = 1; i <= 8; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_FLOW_ENA",            blk_id, (u16)(0x240 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_FLOW_MATCH_UPPER",    blk_id, (u16)(0x240 + (0x10 * i) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_FLOW_MATCH_UPPER_MID", blk_id, (u16)(0x240 + (0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_FLOW_MATCH_LOWER_MID", blk_id, (u16)(0x240 + (0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_FLOW_MATCH_LOWER",    blk_id, (u16)(0x240 + (0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_FLOW_MASK_UPPER",     blk_id, (u16)(0x240 + (0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_FLOW_MASK_UPPER_MID", blk_id, (u16)(0x240 + (0x10 * i) + 6), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_FLOW_MASK_LOWER_MID", blk_id, (u16)(0x240 + (0x10 * i) + 7), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_IP2_FLOW_MASK_LOWER",     blk_id, (u16)(0x240 + (0x10 * i) + 8), &v, pr);
+    }
+
+    for ( i = 1; i <= 6; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_PTP_FLOW_ENA",            blk_id, (u16)(0x2C0 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_PTP_FLOW_MATCH_UPPER",    blk_id, (u16)(0x2C0 + (0x10 * i) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_PTP_FLOW_MATCH_LOWER",    blk_id, (u16)(0x2C0 + (0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_PTP_FLOW_MASK_UPPER",     blk_id, (u16)(0x2C0 + (0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_PTP_FLOW_MASK_LOWER",     blk_id, (u16)(0x2C0 + (0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_PTP_DOMAIN_RANGE",        blk_id, (u16)(0x2C0 + (0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_PTP_ACTION",              blk_id, (u16)(0x2C0 + (0x10 * i) + 6), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_PTP_ACTION_2",            blk_id, (u16)(0x2C0 + (0x10 * i) + 7), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_PTP_ZERO_FIELD_CTL",      blk_id, (u16)(0x2C0 + (0x10 * i) + 8), &v, pr);
+    }
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR0_PTP_IP_CKSUM_SEL",          blk_id, 0x330, &v, pr);
+
+    return VTSS_RC_OK;
+}
+
+static vtss_rc vtss_phy_ts_read_egr_ana_reg_priv(vtss_state_t *vtss_state,  const vtss_port_no_t port_no, const vtss_port_no_t cfg_port, const u32 blk_id, const vtss_debug_printf_t pr)
+{
+    u32     v = 0;
+    u32     i = 0;
+    /* Read ethernet first comparator:*/
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH1_NXT_PROTOCOL",         blk_id, 0x00, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH1_VLAN_TPID_CFG",        blk_id, 0x01, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH1_TAG_MODE",             blk_id, 0x02, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH1_ETYPE_MATCH",          blk_id, 0x03, &v, pr);
+
+    for ( i = 1; i <= 8; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH1_FLOW_ENABLE",            blk_id, (u16)(0x10 * i), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH1_MATCH_MODE",             blk_id, (u16)((0x10 * i) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH1_ADDR_MATCH_1",           blk_id, (u16)((0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH1_ADDR_MATCH_2",           blk_id, (u16)((0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH1_VLAN_TAG_RANGE_I_TAG",   blk_id, (u16)((0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH1_VLAN_TAG1",              blk_id, (u16)((0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH1_VLAN_TAG2_I_TAG",        blk_id, (u16)((0x10 * i) + 6), &v, pr);
+    }
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH2_NXT_PROTOCOL",         blk_id, 0x90, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH2_VLAN_TPID_CFG",        blk_id, 0x91, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH2_ETYPE_MATCH",          blk_id, 0x92, &v, pr);
+
+    for ( i = 1; i <= 8; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH2_FLOW_ENABLE",            blk_id, (u16)(0x90 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH2_MATCH_MODE",             blk_id, (u16)(0x90 + (0x10 * i) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH2_ADDR_MATCH_1",           blk_id, (u16)(0x90 + (0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH2_ADDR_MATCH_2",           blk_id, (u16)(0x90 + (0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH2_VLAN_TAG_RANGE_I_TAG",   blk_id, (u16)(0x90 + (0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH2_VLAN_TAG1",              blk_id, (u16)(0x90 + (0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_ETH2_VLAN_TAG2_I_TAG",        blk_id, (u16)(0x90 + (0x10 * i) + 6), &v, pr);
+    }
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_MPLS_NXT_COMPARATOR",         blk_id, 0x120, &v, pr);
+
+    for ( i = 1; i <= 8; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_MPLS_FLOW_CONTROL",            blk_id, (u16)(0x120 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_MPLS_LABEL_RANGE_LOWER_0",     blk_id, (u16)(0x120 + (0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_MPLS_LABEL_RANGE_UPPER_0",     blk_id, (u16)(0x120 + (0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_MPLS_LABEL_RANGE_LOWER_1",     blk_id, (u16)(0x120 + (0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_MPLS_LABEL_RANGE_UPPER_1",     blk_id, (u16)(0x120 + (0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_MPLS_LABEL_RANGE_LOWER_2",     blk_id, (u16)(0x120 + (0x10 * i) + 6), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_MPLS_LABEL_RANGE_UPPER_2",     blk_id, (u16)(0x120 + (0x10 * i) + 7), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_MPLS_LABEL_RANGE_LOWER_3",     blk_id, (u16)(0x120 + (0x10 * i) + 8), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_MPLS_LABEL_RANGE_UPPER_3",     blk_id, (u16)(0x120 + (0x10 * i) + 9), &v, pr);
+    }
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_NXT_COMPARATOR",          blk_id, 0x1B0, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_MODE",                    blk_id, 0x1B1, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_PROT_MATCH_1",            blk_id, 0x1B2, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_PROT_MATCH_2_UPPER",      blk_id, 0x1B3, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_PROT_MATCH_2_LOWER",      blk_id, 0x1B4, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_PROT_MASK_2_UPPER",       blk_id, 0x1B5, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_PROT_MASK_2_LOWER",       blk_id, 0x1B6, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_PROT_OFFSET_2",           blk_id, 0x1B7, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_UDP_CHKSUM_CFG",          blk_id, 0x1B8, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_FRAME_SIG_CFG",           blk_id, 0x1B9, &v, pr);
+
+    for ( i = 1; i <= 8; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_FLOW_ENA",            blk_id, (u16)(0x1B0 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_FLOW_MATCH_UPPER",    blk_id, (u16)(0x1B0 + (0x10 * i) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_FLOW_MATCH_UPPER_MID", blk_id, (u16)(0x1B0 + (0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_FLOW_MATCH_LOWER_MID", blk_id, (u16)(0x1B0 + (0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_FLOW_MATCH_LOWER",    blk_id, (u16)(0x1B0 + (0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_FLOW_MASK_UPPER",     blk_id, (u16)(0x1B0 + (0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_FLOW_MASK_UPPER_MID", blk_id, (u16)(0x1B0 + (0x10 * i) + 6), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_FLOW_MASK_LOWER_MID", blk_id, (u16)(0x1B0 + (0x10 * i) + 7), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_FLOW_MASK_LOWER",     blk_id, (u16)(0x1B0 + (0x10 * i) + 8), &v, pr);
+    }
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_NXT_COMPARATOR",          blk_id, 0x240, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_MODE",                    blk_id, 0x241, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_PROT_MATCH_1",            blk_id, 0x242, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_PROT_MATCH_2_UPPER",      blk_id, 0x243, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_PROT_MATCH_2_LOWER",      blk_id, 0x244, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_PROT_MASK_2_UPPER",       blk_id, 0x245, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_PROT_MASK_2_LOWER",       blk_id, 0x246, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_PROT_OFFSET_2",           blk_id, 0x247, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_UDP_CHKSUM_CFG",          blk_id, 0x248, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP1_FRAME_SIG_CFG",           blk_id, 0x249, &v, pr);
+
+    for ( i = 1; i <= 8; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_FLOW_ENA",            blk_id, (u16)(0x240 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_FLOW_MATCH_UPPER",    blk_id, (u16)(0x240 + (0x10 * i) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_FLOW_MATCH_UPPER_MID", blk_id, (u16)(0x240 + (0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_FLOW_MATCH_LOWER_MID", blk_id, (u16)(0x240 + (0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_FLOW_MATCH_LOWER",    blk_id, (u16)(0x240 + (0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_FLOW_MASK_UPPER",     blk_id, (u16)(0x240 + (0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_FLOW_MASK_UPPER_MID", blk_id, (u16)(0x240 + (0x10 * i) + 6), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_FLOW_MASK_LOWER_MID", blk_id, (u16)(0x240 + (0x10 * i) + 7), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_IP2_FLOW_MASK_LOWER",     blk_id, (u16)(0x240 + (0x10 * i) + 8), &v, pr);
+    }
+
+    for ( i = 1; i <= 6; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_PTP_FLOW_ENA",            blk_id, (u16)(0x2C0 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_PTP_FLOW_MATCH_UPPER",    blk_id, (u16)(0x2C0 + (0x10 * i) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_PTP_FLOW_MATCH_LOWER",    blk_id, (u16)(0x2C0 + (0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_PTP_FLOW_MASK_UPPER",     blk_id, (u16)(0x2C0 + (0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_PTP_FLOW_MASK_LOWER",     blk_id, (u16)(0x2C0 + (0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_PTP_DOMAIN_RANGE",        blk_id, (u16)(0x2C0 + (0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_PTP_ACTION",              blk_id, (u16)(0x2C0 + (0x10 * i) + 6), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_PTP_ACTION_2",            blk_id, (u16)(0x2C0 + (0x10 * i) + 7), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_PTP_ZERO_FIELD_CTL",      blk_id, (u16)(0x2C0 + (0x10 * i) + 8), &v, pr);
+    }
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_PTP_IP_CKSUM_SEL",          blk_id, 0x330, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_FSB_CFG",                   blk_id, 0x331, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_FSB_MAP_REG_0",             blk_id, 0x332, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_FSB_MAP_REG_1",             blk_id, 0x333, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_FSB_MAP_REG_2",             blk_id, 0x334, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR0_FSB_MAP_REG_3",             blk_id, 0x335, &v, pr);
+
+    return VTSS_RC_OK;
+}
+
+static vtss_rc vtss_phy_ts_read_ing_ana_eng_2_reg_priv( vtss_state_t *vtss_state, const vtss_port_no_t port_no,
+                                                        const vtss_port_no_t cfg_port,
+                                                        const vtss_debug_printf_t pr)
+{
+    u32     v = 0;
+    u32     i = 0;
+    u32     blk_id = 4;
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH1_NXT_PROTOCOL_A",         blk_id, 0x00, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH1_VLAN_TPID_CFG_A",        blk_id, 0x01, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH1_TAG_MODE_A",             blk_id, 0x02, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH1_ETYPE_MATCH_A",          blk_id, 0x03, &v, pr);
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH1_NXT_PROTOCOL_B",         blk_id, 0x10, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH1_VLAN_TPID_CFG_B",        blk_id, 0x11, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH1_TAG_MODE_B",             blk_id, 0x12, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH1_ETYPE_MATCH_B",          blk_id, 0x13, &v, pr);
+
+    for ( i = 1; i <= 8; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH1_FLOW_ENABLE",            blk_id, (u16)(0x10 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH1_MATCH_MODE",             blk_id, (u16)((0x10 + (0x10 * i)) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH1_ADDR_MATCH_1",           blk_id, (u16)((0x10 + (0x10 * i)) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH1_ADDR_MATCH_2",           blk_id, (u16)((0x10 + (0x10 * i)) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH1_VLAN_TAG_RANGE_I_TAG",   blk_id, (u16)((0x10 + (0x10 * i)) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH1_VLAN_TAG1",              blk_id, (u16)((0x10 + (0x10 * i)) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH1_VLAN_TAG2_I_TAG",        blk_id, (u16)((0x10 + (0x10 * i)) + 6), &v, pr);
+    }
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH2_NXT_PROTOCOL_A",         blk_id, 0xA0, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH2_VLAN_TPID_CFG_A",        blk_id, 0xA1, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH2_ETYPE_MATCH_A",          blk_id, 0xA2, &v, pr);
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH2_NXT_PROTOCOL_B",         blk_id, 0xB0, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH2_VLAN_TPID_CFG_B",        blk_id, 0xB1, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH2_ETYPE_MATCH_B",          blk_id, 0xB2, &v, pr);
+
+    for ( i = 1; i <= 8; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH2_FLOW_ENABLE",            blk_id, (u16)(0xB0 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH2_MATCH_MODE",             blk_id, (u16)(0xB0 + (0x10 * i) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH2_ADDR_MATCH_1",           blk_id, (u16)(0xB0 + (0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH2_ADDR_MATCH_2",           blk_id, (u16)(0xB0 + (0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH2_VLAN_TAG_RANGE_I_TAG",   blk_id, (u16)(0xB0 + (0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH2_VLAN_TAG1",              blk_id, (u16)(0xB0 + (0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_ETH2_VLAN_TAG2_I_TAG",        blk_id, (u16)(0xB0 + (0x10 * i) + 6), &v, pr);
+    }
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_MPLS_NXT_COMPARATOR_A",         blk_id, 0x140, &v, pr);
+
+    for ( i = 1; i <= 8; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_MPLS_FLOW_CONTROL",            blk_id, (u16)(0x150 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_MPLS_LABEL_RANGE_LOWER_0",     blk_id, (u16)(0x150 + (0x10 * i) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_MPLS_LABEL_RANGE_UPPER_0",     blk_id, (u16)(0x150 + (0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_MPLS_LABEL_RANGE_LOWER_1",     blk_id, (u16)(0x150 + (0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_MPLS_LABEL_RANGE_UPPER_1",     blk_id, (u16)(0x150 + (0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_MPLS_LABEL_RANGE_LOWER_2",     blk_id, (u16)(0x150 + (0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_MPLS_LABEL_RANGE_UPPER_2",     blk_id, (u16)(0x150 + (0x10 * i) + 6), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_MPLS_LABEL_RANGE_LOWER_3",     blk_id, (u16)(0x150 + (0x10 * i) + 7), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_MPLS_LABEL_RANGE_UPPER_3",     blk_id, (u16)(0x150 + (0x10 * i) + 8), &v, pr);
+    }
+
+    for ( i = 1; i <= 6; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_PTP_FLOW_ENA",            blk_id, (u16)(0x1D0 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_PTP_FLOW_MATCH_UPPER",    blk_id, (u16)(0x1D0 + (0x10 * i) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_PTP_FLOW_MATCH_LOWER",    blk_id, (u16)(0x1D0 + (0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_PTP_FLOW_MASK_UPPER",     blk_id, (u16)(0x1D0 + (0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_PTP_FLOW_MASK_LOWER",     blk_id, (u16)(0x1D0 + (0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_PTP_DOMAIN_RANGE",        blk_id, (u16)(0x1D0 + (0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_PTP_ACTION",              blk_id, (u16)(0x1D0 + (0x10 * i) + 6), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_PTP_ACTION_2",            blk_id, (u16)(0x1D0 + (0x10 * i) + 7), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR2_PTP_ZERO_FIELD_CTL",      blk_id, (u16)(0x1D0 + (0x10 * i) + 8), &v, pr);
+    }
+
+    return VTSS_RC_OK;
+}
+
+static vtss_rc vtss_phy_ts_read_egr_ana_eng_2_reg_priv(vtss_state_t *vtss_state, const vtss_port_no_t port_no,
+                                                       const vtss_port_no_t cfg_port,
+                                                       const vtss_debug_printf_t pr)
+{
+    u32     v = 0;
+    u32     i = 0;
+    u32     blk_id = 5;
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH1_NXT_PROTOCOL_A",         blk_id, 0x00, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH1_VLAN_TPID_CFG_A",        blk_id, 0x01, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH1_TAG_MODE_A",             blk_id, 0x02, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH1_ETYPE_MATCH_A",          blk_id, 0x03, &v, pr);
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH1_NXT_PROTOCOL_B",         blk_id, 0x10, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH1_VLAN_TPID_CFG_B",        blk_id, 0x11, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH1_TAG_MODE_B",             blk_id, 0x12, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH1_ETYPE_MATCH_B",          blk_id, 0x13, &v, pr);
+
+    for ( i = 1; i <= 8; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH1_FLOW_ENABLE",            blk_id, (u16)(0x10 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH1_MATCH_MODE",             blk_id, (u16)((0x10 + (0x10 * i)) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH1_ADDR_MATCH_1",           blk_id, (u16)((0x10 + (0x10 * i)) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH1_ADDR_MATCH_2",           blk_id, (u16)((0x10 + (0x10 * i)) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH1_VLAN_TAG_RANGE_I_TAG",   blk_id, (u16)((0x10 + (0x10 * i)) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH1_VLAN_TAG1",              blk_id, (u16)((0x10 + (0x10 * i)) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH1_VLAN_TAG2_I_TAG",        blk_id, (u16)((0x10 + (0x10 * i)) + 6), &v, pr);
+    }
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH2_NXT_PROTOCOL_A",         blk_id, 0xA0, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH2_VLAN_TPID_CFG_A",        blk_id, 0xA1, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH2_ETYPE_MATCH_A",          blk_id, 0xA2, &v, pr);
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH2_NXT_PROTOCOL_B",         blk_id, 0xB0, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH2_VLAN_TPID_CFG_B",        blk_id, 0xB1, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH2_ETYPE_MATCH_B",          blk_id, 0xB2, &v, pr);
+
+    for ( i = 1; i <= 8; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH2_FLOW_ENABLE",            blk_id, (u16)(0xB0 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH2_MATCH_MODE",             blk_id, (u16)(0xB0 + (0x10 * i) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH2_ADDR_MATCH_1",           blk_id, (u16)(0xB0 + (0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH2_ADDR_MATCH_2",           blk_id, (u16)(0xB0 + (0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH2_VLAN_TAG_RANGE_I_TAG",   blk_id, (u16)(0xB0 + (0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH2_VLAN_TAG1",              blk_id, (u16)(0xB0 + (0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_ETH2_VLAN_TAG2_I_TAG",        blk_id, (u16)(0xB0 + (0x10 * i) + 6), &v, pr);
+    }
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_MPLS_NXT_COMPARATOR_A",         blk_id, 0x140, &v, pr);
+
+    for ( i = 1; i <= 8; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_MPLS_FLOW_CONTROL",            blk_id, (u16)(0x150 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_MPLS_LABEL_RANGE_LOWER_0",     blk_id, (u16)(0x150 + (0x10 * i) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_MPLS_LABEL_RANGE_UPPER_0",     blk_id, (u16)(0x150 + (0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_MPLS_LABEL_RANGE_LOWER_1",     blk_id, (u16)(0x150 + (0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_MPLS_LABEL_RANGE_UPPER_1",     blk_id, (u16)(0x150 + (0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_MPLS_LABEL_RANGE_LOWER_2",     blk_id, (u16)(0x150 + (0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_MPLS_LABEL_RANGE_UPPER_2",     blk_id, (u16)(0x150 + (0x10 * i) + 6), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_MPLS_LABEL_RANGE_LOWER_3",     blk_id, (u16)(0x150 + (0x10 * i) + 7), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_MPLS_LABEL_RANGE_UPPER_3",     blk_id, (u16)(0x150 + (0x10 * i) + 8), &v, pr);
+    }
+
+    for ( i = 1; i <= 6; i++) {
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_PTP_FLOW_ENA",            blk_id, (u16)(0x1D0 + (0x10 * i)), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_PTP_FLOW_MATCH_UPPER",    blk_id, (u16)(0x1D0 + (0x10 * i) + 1), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_PTP_FLOW_MATCH_LOWER",    blk_id, (u16)(0x1D0 + (0x10 * i) + 2), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_PTP_FLOW_MASK_UPPER",     blk_id, (u16)(0x1D0 + (0x10 * i) + 3), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_PTP_FLOW_MASK_LOWER",     blk_id, (u16)(0x1D0 + (0x10 * i) + 4), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_PTP_DOMAIN_RANGE",        blk_id, (u16)(0x1D0 + (0x10 * i) + 5), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_PTP_ACTION",              blk_id, (u16)(0x1D0 + (0x10 * i) + 6), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_PTP_ACTION_2",            blk_id, (u16)(0x1D0 + (0x10 * i) + 7), &v, pr);
+        VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR2_PTP_ZERO_FIELD_CTL",      blk_id, (u16)(0x1D0 + (0x10 * i) + 8), &v, pr);
+    }
+
+    return VTSS_RC_OK;
+}
+
+
+static vtss_rc vtss_phy_ts_read_proc_reg_priv( vtss_state_t *vtss_state, const vtss_port_no_t port_no, const vtss_port_no_t cfg_port, const u32 blk_id, const vtss_debug_printf_t pr)
+{
+    u32                v = 0;
+    /* Read ethernet first comparator:*/
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INTERFACE_CTL",             blk_id, 0x00, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "ANALYZER_MODE",             blk_id, 0x01, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "SPARE_REGISTER",            blk_id, 0x02, &v, pr);
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "LTC_CTRL",                  blk_id, 0x10, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "LTC_LOAD_SEC_H",            blk_id, 0x11, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "LTC_LOAD_SEC_L",            blk_id, 0x12, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "LTC_LOAD_NS",               blk_id, 0x13, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "LTC_SAVED_SEC_H",           blk_id, 0x14, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "LTC_SAVED_SEC_L",           blk_id, 0x15, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "LTC_SAVED_NS",              blk_id, 0x16, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "LTC_SEQUENCE",              blk_id, 0x17, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "LTC_SEQ",                   blk_id, 0x18, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "LTC_AUTO_ADJUST",           blk_id, 0x1A, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "LTC_1PPS_WIDTH_ADJ",        blk_id, 0x1B, &v, pr);
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "TS_FIFO_SI_CFG",            blk_id, 0x20, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "TS_FIFO_SI_TX_CNT",         blk_id, 0x21, &v, pr);
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "IG_CFG",                    blk_id, 0x22, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "IG_PMA",                    blk_id, 0x23, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "IG_XFI",                    blk_id, 0x24, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "IG_OTN",                    blk_id, 0x25, &v, pr);
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EG_CFG",                    blk_id, 0x26, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EG_WIS_FRAME",              blk_id, 0x27, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EG_WIS_DELAYS",             blk_id, 0x28, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EG_PMA",                    blk_id, 0x29, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EG_XFI",                    blk_id, 0x2A, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EG_OTN",                    blk_id, 0x2B, &v, pr);
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "MISC_CFG",                  blk_id, 0x2C, &v, pr);
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR_INT_STATUS",           blk_id, 0x2D, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR_INT_MASK",             blk_id, 0x2E, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR_SPARE_REGISTER",       blk_id, 0x2F, &v, pr);
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR_TSP_CTRL",             blk_id, 0x35, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR_TSP_STAT",             blk_id, 0x36, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR_LOCAL_LATENCY",        blk_id, 0x37, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR_PATH_DELAY",           blk_id, 0x38, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR_DELAY_ASYMMETRY",      blk_id, 0x39, &v, pr);
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR_DF_CTRL",              blk_id, 0x3A, &v, pr);
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR_RW_CTRL",              blk_id, 0x44, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR_RW_MODFRM_CNT",        blk_id, 0x45, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR_RW_FCS_ERR_CNT",       blk_id, 0x46, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "INGR_RW_PREAMBLE_ERR_CNT",  blk_id, 0x47, &v, pr);
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_INT_STATUS",            blk_id, 0x4D, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_INT_MASK",              blk_id, 0x4E, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_SPARE_REGISTER",        blk_id, 0x4F, &v, pr);
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_TSP_CTRL",              blk_id, 0x55, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_TSP_STAT",              blk_id, 0x56, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_LOCAL_LATENCY",         blk_id, 0x57, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_PATH_DELAY",            blk_id, 0x58, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_DELAY_ASYMMETRY",       blk_id, 0x59, &v, pr);
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_DF_CTRL",               blk_id, 0x5A, &v, pr);
+
+#if 0
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_TSFIFO_CSR",            blk_id, 0x5B, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_TSFIFO_0",              blk_id, 0x5C, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_TSFIFO_1",              blk_id, 0x5D, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_TSFIFO_2",              blk_id, 0x5E, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_TSFIFO_3",              blk_id, 0x5F, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_TSFIFO_4",              blk_id, 0x60, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_TSFIFO_5",              blk_id, 0x61, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_TSFIFO_6",              blk_id, 0x62, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_TSFIFO_DROP_CNT",       blk_id, 0x63, &v, pr);
+#endif
+
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_RW_CTRL",               blk_id, 0x64, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_RW_MODFRM_CNT",         blk_id, 0x65, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_RW_FCS_ERR_CNT",        blk_id, 0x66, &v, pr);
+    VTSS_PHY_1588_PRINT_CSR(port_no, cfg_port, "EGR_RW_PREAMBLE_ERR_CNT",   blk_id, 0x67, &v, pr);
+    return VTSS_RC_OK;
+}
+
+vtss_rc vtss_phy_1588_debug_reg_read_private(vtss_state_t *vtss_state, vtss_port_no_t port_no, u32 blk_id, const vtss_debug_printf_t pr)
+{
+    vtss_rc rc = VTSS_RC_OK;
+    vtss_port_no_t cfg_port = port_no;
+    u32  phy_type = 0;
+    u16  device_feature_status = 0;
+    BOOL clause45 = FALSE;
+    vtss_phy_ts_oper_mode_t oper_mode = VTSS_PHY_TS_OPER_MODE_INV;
+
+    do {
+        if ((rc = vtss_phy_ts_register_access_type_get(vtss_state, port_no, &phy_type, &device_feature_status, &clause45, &oper_mode)) != VTSS_RC_OK) {
+            VTSS_E("Reg access type check failed: port: %x", port_no);
+            break;
+        }
+
+#ifdef VTSS_CHIP_10G_PHY
+        if ((phy_type == VTSS_PHY_TYPE_8487) || (phy_type == VTSS_PHY_TYPE_8488)) {
+            if ((rc = vtss_phy_ts_base_port_get_priv(vtss_state, port_no, &cfg_port)) != VTSS_RC_OK) {
+                return VTSS_RC_ERROR;
+            }
+        }
+#endif
+
+#ifdef VTSS_CHIP_CU_PHY
+        if (phy_type == VTSS_PHY_TYPE_8574) {
+            if ((rc = vtss_phy_ts_base_port_get_priv(vtss_state, port_no, &cfg_port)) != VTSS_RC_OK) {
+
+                VTSS_E("Base port get failed: port: %x", port_no);
+                break;
+            }
+        }
+#endif
+
+#if defined(TESLA_ING_TS_ERRFIX)
+        if (phy_type == VTSS_PHY_TYPE_8574) {
+            /* SPI PAUSE need to skip */
+            vtss_state->ts_csr_thr_mm = FALSE;
+            vtss_state->rd_ts_fifo = FALSE;
+        }
+#endif
+
+        VTSS_PHY_TS_SPI_PAUSE_PRIV(port_no);
+
+        switch (blk_id) {
+        case 0:
+            pr("%-4s %-5s %-35s %-6s 0x%-10s\n","port", "block", "Name", "addr", "value");
+            vtss_phy_ts_read_ing_ana_reg_priv(vtss_state, port_no, cfg_port, blk_id, pr);
+            break;
+        case 1:
+            pr("%-4s %-5s %-35s %-6s 0x%-10s\n","port", "block", "Name", "addr", "value");
+            vtss_phy_ts_read_egr_ana_reg_priv(vtss_state, port_no, cfg_port, blk_id, pr);
+            break;
+        case 2:
+            pr("%-4s %-5s %-35s %-6s 0x%-10s\n","port", "block", "Name", "addr", "value");
+            vtss_phy_ts_read_ing_ana_reg_priv(vtss_state, port_no, cfg_port, blk_id, pr);
+            break;
+        case 3:
+            pr("%-4s %-5s %-35s %-6s 0x%-10s\n","port", "block", "Name", "addr", "value");
+            vtss_phy_ts_read_egr_ana_reg_priv(vtss_state, port_no, cfg_port, blk_id, pr);
+            break;
+        case 4:
+            pr("%-4s %-5s %-35s %-6s 0x%-10s\n","port", "block", "Name", "addr", "value");
+            vtss_phy_ts_read_ing_ana_eng_2_reg_priv(vtss_state, port_no, cfg_port, pr);
+            break;
+        case 5:
+            pr("%-4s %-5s %-35s %-6s 0x%-10s\n","port", "block", "Name", "addr", "value");
+            vtss_phy_ts_read_egr_ana_eng_2_reg_priv(vtss_state, port_no, cfg_port, pr);
+            break;
+        case 6:
+        case 7:
+            pr("%-4s %-5s %-35s %-6s 0x%-10s\n","port", "block", "Name", "addr", "value");
+            vtss_phy_ts_read_proc_reg_priv(vtss_state, port_no, cfg_port, blk_id, pr);
+            break;
+        default:
+            rc = VTSS_RC_ERROR;
+            break;
+        }
+        VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+
+#if defined(TESLA_ING_TS_ERRFIX)
+        if (phy_type == VTSS_PHY_TYPE_8574) {
+            /* SPI PAUSE need to skip */
+            vtss_state->ts_csr_thr_mm = TRUE;
+            vtss_state->rd_ts_fifo = FALSE;
+        }
+#endif
+    } while (FALSE);
+
+    return rc;
+}
+
+vtss_rc vtss_phy_1588_debug_reg_read(const vtss_inst_t inst, 
+                                     const vtss_port_no_t port_no, 
+                                     const u32 blk_id,
+                                     const vtss_debug_printf_t p_routine)
+{
+    vtss_state_t *vtss_state;
+    vtss_rc rc = VTSS_RC_OK;
+
+    VTSS_ENTER();
+    do {
+        if ((rc = vtss_inst_port_no_check(inst, &vtss_state, port_no)) != VTSS_RC_OK) {
+            VTSS_E("Port no check failed, port: %d", port_no);
+            break;
+        }
+
+        rc = vtss_phy_1588_debug_reg_read_private(vtss_state, port_no, blk_id, p_routine);
+
+    } while (FALSE);
+
+    VTSS_EXIT();
+
+    return rc;
+}
+
+#endif
+
+/* *********************************************************************************************** */
+/*                                  END of 1588_DEBUG_REG_READ                                     */
+/* *********************************************************************************************** */
+
 vtss_rc vtss_phy_ts_one_shot_delays_load(vtss_state_t *vtss_state,
                                          const vtss_port_no_t port_no)
 {
@@ -23422,23 +24511,35 @@ vtss_rc vtss_phy_ts_one_shot_delays_load(vtss_state_t *vtss_state,
                                   VTSS_PTP_EGR_IP_1588_TSP_EGR_TSP_CTRL, &value));
     return VTSS_RC_OK;
 }
+
 vtss_rc vtss_phy_ts_bypass_set(vtss_state_t    *vtss_state,
                                const vtss_port_no_t   port_no, BOOL enable,
                                BOOL force_bypass)
 {
     BOOL new_revision = TRUE;
     u32 value = 0;
+    BOOL gen2 , support;
+    vtss_phy_ts_blk_id_t blk_id = VTSS_PHY_TS_PROC_BLK_ID(0);
+    vtss_port_no_t base_port_no;
 
-    if (vtss_phy_ts_is_1588_supported(vtss_state, port_no) == TRUE ) {
+    VTSS_RC(vtss_phy_ts_is_1588_supported(vtss_state, port_no, &gen2, &support));
+
+        if (vtss_state->phy_ts_port_conf[port_no].port_ts_init_done == FALSE) {
+            vtss_phy_ts_base_port_get_priv(vtss_state, port_no, &base_port_no);
+            if(base_port_no != port_no)
+                blk_id = VTSS_PHY_TS_PROC_BLK_ID(1);
+        }
+
+    if (support ) {
         if (enable == TRUE) {
             VTSS_I("Set 1588 in bypass on port %u", port_no);
 
             //For the new Revision Devices Bypass cannot cause 1588 to go OOS, So no need to display the warning.
             VTSS_RC(vtss_phy_ts_version_check(vtss_state, port_no, &new_revision));
-            if(new_revision == FALSE){
+            if (new_revision == FALSE) {
 #if defined(VTSS_FEATURE_MACSEC)
                 if (vtss_state->phy_ts_port_conf[port_no].is_gen2 == TRUE) {
-                    VTSS_RC(VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0), VTSS_PTP_IP_1588_TOP_CFG_STAT_MODE_CTL, &value));
+                    VTSS_RC(VTSS_PHY_TS_READ_CSR(port_no, blk_id, VTSS_PTP_IP_1588_TOP_CFG_STAT_MODE_CTL, &value));
                     if(VTSS_X_PTP_IP_1588_TOP_CFG_STAT_MODE_CTL_PROTOCOL_MODE(value) == 4){
                         if (!force_bypass) {
                             VTSS_I("MAC's Enabled on the port_no : %u Setting Bypass can cause 1588 to go OOS, skipping bypass operation\n", port_no);
@@ -23454,23 +24555,32 @@ vtss_rc vtss_phy_ts_bypass_set(vtss_state_t    *vtss_state,
             //        if (vtss_state->phy_ts_port_conf[port_no].port_ena) {
             VTSS_RC(VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0),
                                          VTSS_PTP_IP_1588_TOP_CFG_STAT_INTERFACE_CTL, &value));
+           /* Bit 6 :: CLK_ENA = 1, CLK_DIS = 0,   Init:CLK_ENA
+            * Bit 2 :: BYPASS_DIS  = 0, BYPASS_ENA = 1, Init:BYPASS_ENA
+            * Bit 1:0 :: MII protocol : 0 XGMII-64
+            */
             value |= (VTSS_F_PTP_IP_1588_TOP_CFG_STAT_INTERFACE_CTL_EGR_BYPASS);
-            VTSS_RC(VTSS_PHY_TS_WRITE_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0),
-                                          VTSS_PTP_IP_1588_TOP_CFG_STAT_INTERFACE_CTL, &value));
+            VTSS_RC(VTSS_PHY_TS_WRITE_CSR(port_no, blk_id,
+                    VTSS_PTP_IP_1588_TOP_CFG_STAT_INTERFACE_CTL, &value));
             // wait for 1ms after 1588 bypass
             //           VTSS_MSLEEP(1);
             //        }
         } else {
-            /*5. Enable 1588 datapath */
-            VTSS_I("Enable 1588 datapath port %u", port_no);
             if (vtss_state->phy_ts_port_conf[port_no].port_ena) {
                 VTSS_RC(VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0),
                                              VTSS_PTP_IP_1588_TOP_CFG_STAT_INTERFACE_CTL, &value));
+               /* Bit 6 :: CLK_ENA = 1, CLK_DIS = 0,   Init:CLK_ENA
+                * Bit 2 :: BYPASS_DIS  = 0, BYPASS_ENA = 1, Init:BYPASS_ENA
+                * Bit 1:0 :: MII protocol : 0 XGMII-64
+                */
+                VTSS_I("1588-Port-Enabled::Clearing BYPASS - Enable 1588 datapath on port %u", port_no);
                 value = VTSS_PHY_TS_CLR_BITS(value, (VTSS_F_PTP_IP_1588_TOP_CFG_STAT_INTERFACE_CTL_EGR_BYPASS)) ;
-                VTSS_RC(VTSS_PHY_TS_WRITE_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0),
-                                              VTSS_PTP_IP_1588_TOP_CFG_STAT_INTERFACE_CTL, &value));
-                VTSS_RC(VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0),
-                                             VTSS_PTP_IP_1588_TOP_CFG_STAT_VERSION_CODE, &value));
+                VTSS_RC(VTSS_PHY_TS_WRITE_CSR(port_no, blk_id,
+                        VTSS_PTP_IP_1588_TOP_CFG_STAT_INTERFACE_CTL, &value));
+                VTSS_RC(VTSS_PHY_TS_READ_CSR(port_no, blk_id,
+                        VTSS_PTP_IP_1588_TOP_CFG_STAT_VERSION_CODE, &value));
+            } else {
+                VTSS_I("1588-Port-NOT-Enabled:: 1588 datapath on port %u Disabled", port_no);
             }
         }
     }
@@ -23493,4 +24603,63 @@ vtss_rc vtss_phy_ts_version_check(vtss_state_t    *vtss_state,
     }
     return VTSS_RC_OK;
 }
+
+
+vtss_rc vtss_phy_ts_flow_clear_cf_set(const vtss_inst_t                     inst,
+                                      const vtss_port_no_t                  port_no,
+                                      BOOL                                  ingress,
+                                      const vtss_phy_ts_engine_t            eng_id,
+                                      u8                                    act_id,
+                                      const vtss_phy_ts_ptp_message_type_t  msgtype)
+{
+    vtss_rc rc = VTSS_RC_OK;
+    vtss_port_no_t base_port_no;
+    vtss_phy_ts_eng_conf_t *eng_conf;
+    vtss_state_t *vtss_state;
+
+    if (!VTSS_PHY_TS_ENGINE_ID_VALID(eng_id)) {
+        VTSS_E("Invalid Engined ID: %d", eng_id);
+        return VTSS_RC_ERROR;
+    }
+
+    if (!((act_id == 0) || (act_id == 1))) {
+        VTSS_E("Invalid Action Id: %d", act_id);
+        return VTSS_RC_ERROR;
+    }
+
+    VTSS_ENTER();
+
+    do {
+        if ((rc = vtss_inst_port_no_check(inst, &vtss_state, port_no)) != VTSS_RC_OK) {
+            break;
+        }
+        if ((rc = vtss_phy_ts_base_port_get_priv(vtss_state, port_no, &base_port_no)) != VTSS_RC_OK) {
+            break;
+        }
+        if (ingress) {
+            eng_conf = &vtss_state->phy_ts_port_conf[base_port_no].ingress_eng_conf[eng_id];
+        } else {
+            eng_conf = &vtss_state->phy_ts_port_conf[base_port_no].egress_eng_conf[eng_id];
+        }
+        if ( !eng_conf->eng_used || !eng_conf->action_conf.action_ptp ) {
+            VTSS_E("Invalid Engine id configuration: %d", eng_id);
+            rc = VTSS_RC_ERROR;
+            break;
+        }
+
+        VTSS_PHY_TS_SPI_PAUSE_COLD(port_no);
+        VTSS_D("Clear correction field attempted on port %u , direction %s , engine %u action %u msgtype %u \n",
+               port_no, ingress ? "ingress" : "egress", eng_id, act_id, msgtype);
+
+        rc = vtss_phy_ts_flow_clear_cf_set_priv(vtss_state, ingress, port_no, base_port_no, eng_id, act_id, msgtype);
+
+        VTSS_PHY_TS_SPI_UNPAUSE_COLD(port_no);
+
+    } while (0);
+
+    VTSS_EXIT();
+
+    return rc;
+}
+
 #endif /* VTSS_FEATURE_PHY_TIMESTAMP*/

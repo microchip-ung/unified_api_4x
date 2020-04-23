@@ -1,27 +1,25 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
 
 */
@@ -310,7 +308,7 @@
 #if !defined(VTSS_OPT_PCIE_ACCESS) && !defined(VTSS_OPT_VRAP_ACCESS)
 #define VTSS_OPT_PCIE_ACCESS                    /**< PCIe access from external CPU */
 #endif
-#define VTSS_PHY_10G_FIFO_SYNC
+#define VTSS_PHY_10G_FIFO_SYNC                 /**< TSFIFO SYNC For 10G PHY */
 #define VIPER_B_FIFO_RESET                     /**< Viper B 1588 FIFO sync */
 #endif /* VTSS_ARCH_JAGUAR_2 */
 
@@ -494,7 +492,9 @@
 #define VTSS_FEATURE_SERDES_MACRO_SETTINGS     /**< Hooks for Serdes Macro configuration */
 #define TESLA_ING_TS_ERRFIX                    /**< PHY Timestamp FIFO out of sync Support */
 #define VIPER_B_FIFO_RESET                     /**< Viper B 1588 FIFO sync */
+//#define TESLA_FIFO_SYNC_OOS_RE_CHECK_FIFO    /**< PHY Timestamp FIFO OOS Check, Re-run if Reg22E3 shows CRC Errors */
 //#define VTSS_TS_FIFO_SYNC                      /**< PHY Timestamp FIFO OOS CHECK for correction of TSFIFO, in Link-Down Handler  */
+#define VTSS_TS_FIFO_SYNC_LOOPBACK             /**< PHY Timestamp FIFO OOS Check, Run Automatically if FE Looback transition to OFF */
 #define VTSS_TS_FIFO_MEDIA_SWAP_SYNC           /**< PHY Timestamp FIFO OOS CHECK for correction of TSFIFO, in MEDIA i/f Swap case */
 #define VTSS_PHY_TS_SPI_CLK_THRU_PPS0          /**< Use 1588_PPS0 as New SPI_CLK, applicable only to 8574-15; old SPI_CLK pin will not be used anymore */
 #endif /* VTSS_ARCH_SERVAL */

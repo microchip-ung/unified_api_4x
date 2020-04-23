@@ -1,27 +1,25 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
 
 */
@@ -1444,6 +1442,87 @@ static vtss_port_no_t vtss_phy_chip_port(vtss_state_t *vtss_state, vtss_port_no_
     return (reg_val & VTSS_M_VTSS_PHY_EXTENDED_PHY_CONTROL_4_PHY_ADDRESS) >> 11;
 }
 
+
+/* Bz#23788 Work-Around for 100BT Link break Issue, after restoring link it does not come up for a long time. */
+/* The Condition required is that the Links should be DOWN */
+static vtss_rc vtss_phy_100BaseT_long_linkup_workaround(vtss_state_t *vtss_state, vtss_port_no_t port_no, BOOL force)
+{
+    vtss_phy_port_state_t *ps = &vtss_state->phy_state[port_no];
+    vtss_phy_reset_conf_t *conf = &ps->reset;
+    u16                   tp_reg5 = 0;
+    u16                   tr_reg17 = 0;
+    u16                   tr_reg18 = 0;
+    u16                   reg4val = 0;
+    u16                   reg9val = 0;
+    u16                   retryCnt100 = 0;
+
+
+    /* If the current link is down NOW, then execute */
+    /* Bz#23788 Work-Around for 100BT Link break Issue, after restoring link it does not come up for a long time. */
+    switch (ps->family) {
+    case VTSS_PHY_FAMILY_TESLA:
+        if (ps->type.revision < VTSS_PHY_TESLA_REV_E) {
+            break;
+        }
+        /* Tesla Rev. E falls thru and same as Viper and Elise */
+    case VTSS_PHY_FAMILY_VIPER:
+    case VTSS_PHY_FAMILY_NANO :
+        if ((conf->media_if == VTSS_PHY_MEDIA_IF_CU) && (ps->setup.mode == VTSS_PHY_MODE_FORCED) &&
+            (ps->setup.forced.speed == VTSS_SPEED_100M)) {
+            /* Only if 100M Forced Speed Copper */ 
+            VTSS_RC(vtss_phy_page_tr(vtss_state, port_no));
+            VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0xaff4)); /* Read in Data */
+            VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, &tr_reg18)); /* Read bit 7, PreEmphEnabled status  */
+            VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, &tr_reg17)); /* Read 5:0, RetryCnt100 */
+            VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
+            retryCnt100 = tr_reg17 & 0x003f;
+            VTSS_I("Reading TR_16 addr:0x0ff4 PreEmphEnabled status for port_no: %u, TR18: 0x%04x,  TR17: 0x%04x, retryCnt100: %d",
+                 port_no, tr_reg18, tr_reg17, retryCnt100);
+
+            /* Toggling ANEG causes the retryCnt100 to increment */
+            /* If the is Media i/f setup or if this is Link transition from Link Up to down, then Force this work-around */
+            /* If the is Link is down and has been down, only execute the work-around if retryCnt100 has incremented more than 3 */
+            /* Note: vtss_phy_status_get() is called by the Applicaiton, so the rate could be 1/sec or 10/sec or 5/sec  */
+            /*       The retryCnt100 is trying to limit the number of times this is activated giving reasonable time for link-up */
+            if ((force) || 
+                (retryCnt100 < ps->forced_long_linkup_counter) ||
+                (retryCnt100 > ((ps->forced_long_linkup_counter + VTSS_FORCED_LONG_LINKUP_COUNTER_WINDOW) & 0x003f))) {
+                /* Only apply the workaround for PHY with TP5.11 is set */
+                VTSS_RC(vtss_phy_page_test(vtss_state, port_no));
+                VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_TEST_PAGE_5, &tp_reg5)); /* Read TP_Reg5.11 */
+                VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
+                /* The problem only occurs if the pre-emphasis feature (TP5.11) is enabled   */
+                if (tp_reg5 & 0x0800) {
+                    VTSS_I("Forced Mode - Cu Media Interface, Checking link-down for 100BT_Long_LinkDn_Work_Around\n");
+                    if (tr_reg18 & 0x0080) {  /* Currently Have NO Link and PreEmphEnabledStatus set */
+                        VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_DEVICE_AUTONEG_ADVERTISEMENT, &reg4val));
+                        VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_1000BASE_T_CONTROL, &reg9val));
+                        VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_DEVICE_AUTONEG_ADVERTISEMENT, 0x1));
+                        VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_1000BASE_T_CONTROL, 0x0));
+                        VTSS_RC(PHY_WR_MASKED_PAGE(vtss_state, port_no, VTSS_PHY_MODE_CONTROL, 0x1000, 0x1000));
+                        VTSS_I("Toggle ANEG 100BT_Long_LinkDn_Work_Around Executed - ADVERTISEMENTS Clear\n");
+                        VTSS_RC(PHY_WR_MASKED_PAGE(vtss_state, port_no, VTSS_PHY_MODE_CONTROL, 0x0000, 0x1000));
+                        VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_DEVICE_AUTONEG_ADVERTISEMENT, reg4val));
+                        VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_1000BASE_T_CONTROL, reg9val));
+                    } else {
+                        VTSS_I("Forced Mode - Cu Media Interface, Skipping 100BT_Long_LinkDn_Work_Around\n");
+                    }
+                }
+            }
+            /* Update stored counter regardless */
+            ps->forced_long_linkup_counter = retryCnt100;
+        }
+        VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
+        break;
+
+    case VTSS_PHY_FAMILY_ATOM:
+    case VTSS_PHY_FAMILY_LUTON26:
+    case VTSS_PHY_FAMILY_ELISE:
+    default:
+        break;
+    }
+    return (VTSS_RC_OK);
+}
 // Function for soft resetting a single phy port
 // In: port_no : The phy port number to be soft reset
 static vtss_rc vtss_phy_soft_reset_port(vtss_state_t *vtss_state, vtss_port_no_t port_no)
@@ -1492,14 +1571,14 @@ static vtss_rc vtss_phy_soft_reset_port(vtss_state_t *vtss_state, vtss_port_no_t
         VTSS_RC(vtss_phy_conf_1g_set_private(vtss_state, port_no));
 
 #if defined(VTSS_FEATURE_PHY_TIMESTAMP)
-        rc = vtss_phy_ts_bypass_set(vtss_state, port_no, TRUE, FALSE);
+        rc = VTSS_RC_COLD(vtss_phy_ts_bypass_set(vtss_state, port_no, TRUE, FALSE));
         if (rc == VTSS_RC_OK) {
 #endif
 
             rc = vtss_phy_conf_set_private(vtss_state, port_no);
 
 #if defined(VTSS_FEATURE_PHY_TIMESTAMP)
-            rc = vtss_phy_ts_bypass_set(vtss_state, port_no, FALSE, FALSE);
+            rc = VTSS_RC_COLD(vtss_phy_ts_bypass_set(vtss_state, port_no, FALSE, FALSE));
         }
 #endif
 
@@ -1944,6 +2023,7 @@ static vtss_rc vtss_phy_detect(vtss_state_t *vtss_state, const vtss_port_no_t po
     vtss_rc               rc = VTSS_RC_OK;
     vtss_phy_port_state_t *ps = &vtss_state->phy_state[port_no];
     u16                   reg2, reg3, model = 0, sku;
+    u16                   reg30 = 0;
     u32                   oui = 0;
 
     /* Only detect PHY once (avoid overwriting base_port_no) */
@@ -2018,6 +2098,13 @@ static vtss_rc vtss_phy_detect(vtss_state_t *vtss_state, const vtss_port_no_t po
                 ps->family = VTSS_PHY_FAMILY_TESLA;
                 ps->type.port_cnt = 4;
                 ps->type.channel_id = vtss_phy_chip_port(vtss_state, port_no);
+
+                VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));      // Switch to micro/GPIO register-page
+                VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_REVISION, &reg30));
+                if (reg30 & VTSS_F_PHY_EXTENDED_REVISION_TESLA_E) {
+                    ps->type.revision = VTSS_PHY_TESLA_REV_E;
+                }
+                VTSS_RC(vtss_phy_page_std(vtss_state, port_no));       // Switch back to STD register-page
                 break;
 
             case 0x0C : // VSC8504 Tesla
@@ -2025,6 +2112,13 @@ static vtss_rc vtss_phy_detect(vtss_state_t *vtss_state, const vtss_port_no_t po
                 ps->family = VTSS_PHY_FAMILY_TESLA;
                 ps->type.port_cnt = 4;
                 ps->type.channel_id = vtss_phy_chip_port(vtss_state, port_no);
+
+                VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));      // Switch to micro/GPIO register-page
+                VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_REVISION, &reg30));
+                if (reg30 & VTSS_F_PHY_EXTENDED_REVISION_TESLA_E) {
+                    ps->type.revision = VTSS_PHY_TESLA_REV_E;
+                }
+                VTSS_RC(vtss_phy_page_std(vtss_state, port_no));       // Switch back to STD register-page
                 break;
 
             case 0x0D : // VSC8572 Tesla
@@ -2032,6 +2126,13 @@ static vtss_rc vtss_phy_detect(vtss_state_t *vtss_state, const vtss_port_no_t po
                 ps->family = VTSS_PHY_FAMILY_TESLA;
                 ps->type.port_cnt = 2;
                 ps->type.channel_id = vtss_phy_chip_port(vtss_state, port_no);
+
+                VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));      // Switch to micro/GPIO register-page
+                VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_REVISION, &reg30));
+                if (reg30 & VTSS_F_PHY_EXTENDED_REVISION_TESLA_E) {
+                    ps->type.revision = VTSS_PHY_TESLA_REV_E;
+                }
+                VTSS_RC(vtss_phy_page_std(vtss_state, port_no));       // Switch back to STD register-page
                 break;
 
             case 0x0E : // VSC8552 Tesla
@@ -2039,6 +2140,13 @@ static vtss_rc vtss_phy_detect(vtss_state_t *vtss_state, const vtss_port_no_t po
                 ps->family = VTSS_PHY_FAMILY_TESLA;
                 ps->type.port_cnt = 2;
                 ps->type.channel_id = vtss_phy_chip_port(vtss_state, port_no);
+
+                VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));      // Switch to micro/GPIO register-page
+                VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_REVISION, &reg30));
+                if (reg30 & VTSS_F_PHY_EXTENDED_REVISION_TESLA_E) {
+                    ps->type.revision = VTSS_PHY_TESLA_REV_E;
+                }
+                VTSS_RC(vtss_phy_page_std(vtss_state, port_no));       // Switch back to STD register-page
                 break;
 
             case 0x10:
@@ -2603,7 +2711,7 @@ static vtss_rc vtss_phy_pll5g_cfg2_wr_private(vtss_state_t        *vtss_state,
 
 // Macro for making sure that we don't run forever
 //#define SD6G_TIMEOUT(timeout_var) if (timeout_var-- == 0) {goto macro_6g_err;} else {VTSS_MSLEEP(1);}
-#define SD6G_TIMEOUT(timeout_var) if (timeout_var-- == 0) {VTSS_E("Viper 6G macro not configured correctly for port:%d", port_no); return VTSS_RC_ERR_PHY_6G_MACRO_SETUP;} else {VTSS_MSLEEP(1);}
+#define SD6G_TIMEOUT(timeout_var) if (timeout_var-- == 0) {VTSS_E("TIMEOUT_ERROR: SD6G MACRO NOT CONFIGURED CORRECTLY! for port:%d", port_no); return VTSS_RC_ERR_PHY_6G_MACRO_SETUP;} else {VTSS_MSLEEP(1);}
 
 // trigger a write to the spcified MCB
 static vtss_rc vtss_phy_mcb_wr_trig_private(vtss_state_t *vtss_state,
@@ -3097,6 +3205,16 @@ static vtss_rc vtss_phy_sd1g_patch_private(vtss_state_t                *vtss_sta
     VTSS_D("Setting 1G");
     VTSS_RC(vtss_phy_id_get_private(vtss_state, port_no, &phy_id));
 
+    if ((VTSS_PHY_BASE_PORTS_FOUND) != VTSS_RC_OK) { // Make sure that base ports are found for the PHY Instance
+        VTSS_E("Early-Exit from 1G SerDes Patch Config - Base_Port not found!!  base_port: %u", phy_id.base_port_no);
+        return VTSS_RC_ERR_PHY_BASE_NO_NOT_FOUND;
+    }
+
+    if ((phy_id.base_port_no) >= 0xffff) { // Make sure that base ports are found for this port, Default = -1
+        VTSS_E("Early-Exit from 1G SerDes Patch Config - Base_Port INVALID!!  base_port: %u", phy_id.base_port_no);
+        return VTSS_RC_ERR_PHY_BASE_NO_NOT_FOUND;
+    }
+
     VTSS_RC(vtss_phy_mcb_rd_trig_private(vtss_state, phy_id.base_port_no, 0x20, slave_addr)); // read 1G MCB into CSRs
 
     if (is_100fx) {
@@ -3185,6 +3303,16 @@ static vtss_rc vtss_phy_sd6g_patch_private(vtss_state_t                *vtss_sta
 
     VTSS_D("Setting 6G");
     VTSS_RC(vtss_phy_id_get_private(vtss_state, port_no, &phy_id));
+    VTSS_I("Setting 6G SerDes for port_no: %d,    base_port_no: %d", port_no, phy_id.base_port_no);
+
+    if ((VTSS_PHY_BASE_PORTS_FOUND) != VTSS_RC_OK) { // Make sure that base ports are found
+        VTSS_E("Early-Exit from 6G SerDes Patch Config - Base_Port not found!!  base_port: %u", phy_id.base_port_no);
+        return VTSS_RC_ERR_PHY_BASE_NO_NOT_FOUND;
+    }
+    if ((phy_id.base_port_no) >= 0xffff) { // Make sure that base ports are found for this port, Default = -1
+        VTSS_E("Early-Exit from 6G SerDes Patch Config - Base_Port INVALID!!  base_port: %u", phy_id.base_port_no);
+        return VTSS_RC_ERR_PHY_BASE_NO_NOT_FOUND;
+    }
 
     VTSS_RC(vtss_phy_mcb_rd_trig_private(vtss_state, phy_id.base_port_no, 0x3f, 0)); // read 6G MCB into CSRs
 
@@ -4226,7 +4354,7 @@ static vtss_rc vtss_phy_atom12_patch_setttings_get_private(vtss_state_t *vtss_st
         break;
 
     default:
-        VTSS_E("Patch setting get not supported for family:%s", vtss_phy_family2txt(ps->family));
+        VTSS_E("atom12_patch_setttings_get not supported for family:%s", vtss_phy_family2txt(ps->family));
         return VTSS_RC_ERROR;
     }
 
@@ -4263,6 +4391,7 @@ static vtss_rc vtss_phy_atom12_patch_setttings_get_private(vtss_state_t *vtss_st
         VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_MICRO_PAGE, &reg18g));
         stat_buf[idx] = (u8)((reg18g >> 4) & 0xff);
     }
+    VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
     return VTSS_RC_OK;
 }
 
@@ -4278,7 +4407,14 @@ static vtss_rc vtss_phy_tesla_patch_setttings_get_private(vtss_state_t *vtss_sta
     u8 slave_num = 0;
     vtss_phy_port_state_t *ps = &vtss_state->phy_state[port_no];
     vtss_phy_reset_conf_t *conf = &ps->reset;
+    vtss_port_no_t         chip_port_no;
 
+    if (ps->family != VTSS_PHY_FAMILY_TESLA) {
+        VTSS_I("Port_no: %d;   Not a Tesla PHY - Returning", port_no);
+        return (VTSS_RC_OK);
+    }
+
+    chip_port_no = vtss_phy_chip_port(vtss_state, port_no);
 
     switch (ps->family) {
 
@@ -4306,7 +4442,7 @@ static vtss_rc vtss_phy_tesla_patch_setttings_get_private(vtss_state_t *vtss_sta
             *mcb_bus = 0;  // only 1G macros used for fiber media
 
             // 6G macro 0 not used in QSGMII mode
-            switch (port_no % ps->type.port_cnt) {
+            switch (chip_port_no) {
             case 0  :    // 1G macro 0
                 slave_num = 0;
                 break;
@@ -4328,7 +4464,7 @@ static vtss_rc vtss_phy_tesla_patch_setttings_get_private(vtss_state_t *vtss_sta
             *mcb_bus = 0;  // only 1G macros used for fiber media
 
             // 6G macro 0 not used in QSGMII mode
-            switch (port_no % ps->type.port_cnt) {
+            switch (chip_port_no) {
             case 0  :    // 1G macro 0
                 slave_num = 0;
                 *mcb_bus = 1;   // This is 6G MACRO, not 1G
@@ -4349,7 +4485,7 @@ static vtss_rc vtss_phy_tesla_patch_setttings_get_private(vtss_state_t *vtss_sta
 #endif
         } else if (conf->mac_if ==  VTSS_PORT_INTERFACE_QSGMII) {  // QSGMII mapping (these are one macro per quad)
             *mcb_bus = 1;  // only 6G macros used for QSGMII MACs
-            switch (port_no % ps->type.port_cnt) {
+            switch (chip_port_no) {
             // 6G macro 0 not used in QSGMII mode
             case 0 :    // 6G macro 0
             case 1 :
@@ -4361,7 +4497,7 @@ static vtss_rc vtss_phy_tesla_patch_setttings_get_private(vtss_state_t *vtss_sta
                 VTSS_E("Invalid port:%d", port_no);;
             }
         } else if (conf->mac_if ==  VTSS_PORT_INTERFACE_SGMII) {  // SGMII mapping
-            switch (port_no % ps->type.port_cnt) {
+            switch (chip_port_no) {
             // all 6G and 1G macros used for MACs in this mode
             case 0 :    // 6G macro 0
                 *mcb_bus = 1;
@@ -4389,8 +4525,7 @@ static vtss_rc vtss_phy_tesla_patch_setttings_get_private(vtss_state_t *vtss_sta
         return VTSS_RC_ERR_PHY_PATCH_SETTING_NOT_SUPPORTED;
     }
 
-    VTSS_I("Patch setting get for TESLA:%s;  mcb_bus: 0x%x,  slave_num: 0x%x \n", vtss_phy_family2txt(ps->family), *mcb_bus, slave_num);
-
+    VTSS_I("tesla_patch_setttings_get:%s;  port_no: %d; chip_port: %d, mcb_bus: 0x%x,  slave_num: 0x%x \n", vtss_phy_family2txt(ps->family), port_no, chip_port_no, *mcb_bus, slave_num);
 
     // fetch MCB data
     VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));     // Switch to micro/GPIO register-page
@@ -4424,6 +4559,8 @@ static vtss_rc vtss_phy_tesla_patch_setttings_get_private(vtss_state_t *vtss_sta
         VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_MICRO_PAGE, &reg18g));
         stat_buf[idx] = (u8)((reg18g >> 4) & 0xff);
     }
+
+    VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
     return VTSS_RC_OK;
 }
 
@@ -4514,6 +4651,7 @@ static BOOL vtss_phy_chk_serdes_init_mac_mode_private(vtss_state_t              
     vtss_port_interface_t        micro_patch_mac_mode = VTSS_PORT_INTERFACE_NO_CONNECTION;
     vtss_phy_type_t              phy_id;
     u32  rd_dat = 0;
+    u32  rd_dat1 = 0;
     u16  reg19G_val = 0;
     u8   mcb_bus = 0;
     u8   cfg_buf[MAX_CFG_BUF_SIZE];
@@ -4526,11 +4664,11 @@ static BOOL vtss_phy_chk_serdes_init_mac_mode_private(vtss_state_t              
     u8   if_mode = 0;
     u8   mac_if_19G = 0;
 
-    VTSS_D("Checking SerDes Init MAC Mode");
     VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));
     VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_MAC_MODE_AND_FAST_LINK, &reg19G_val));
     VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
     mac_if_19G = (reg19G_val >> 14) & 0x3;
+    VTSS_D("Checking SerDes Init MAC Mode, mac_if_19G: 0x%x", mac_if_19G);
 
     VTSS_RC(vtss_phy_id_get_private(vtss_state, port_no, &phy_id));
 
@@ -4639,17 +4777,37 @@ static BOOL vtss_phy_chk_serdes_init_mac_mode_private(vtss_state_t              
             break;
         }
 
-        VTSS_RC(vtss_phy_mcb_rd_trig_private(vtss_state, phy_id.base_port_no, 0x3f, 0)); // read 6G MCB into CSRs
-        VTSS_RC(vtss_phy_macsec_csr_rd_private(vtss_state, phy_id.base_port_no, 7, 0x2b, &rd_dat)); // MACRO_CTRL::SERDES1G_PLL_CFG
-        pll_fsm_ena = (u8) ((rd_dat & 0x00000080) >> 7);
+        /* Read in MCB's:  For Base Port: 0x3f; For Ports 1,2,3: 0x20 */
+        if (port_no == phy_id.base_port_no) {
+            /* Reading 6G MACRO */
+            VTSS_RC(vtss_phy_mcb_rd_trig_private(vtss_state, phy_id.base_port_no, 0x3f, 0));    // read 6G MCB into CSRs
+            VTSS_RC(vtss_phy_sd6g_csr_reg_rd_dbg_private(vtss_state, port_no, 0x2b, &rd_dat));  // PLL_CFG
+            VTSS_RC(vtss_phy_sd6g_csr_reg_rd_dbg_private(vtss_state, port_no, 0x2c, &rd_dat1)); // COMMON_CFG
+            VTSS_D("VIPER/ELISE: HW Settings for port: %d, base_port: %d, MACRO_CTRL::SERDES6G_PLL_CFG: 0x%08x;  SERDES6G_COMMON_CFG: 0x%08x",
+                   port_no, phy_id.base_port_no, rd_dat, rd_dat1);
+            pll_fsm_ena = (u8) ((rd_dat & 0x00000080) >> 7);
+            sys_rst = (u8)((rd_dat1 & 0x80000000) >> 31);
+            ena_lane = (u8)((rd_dat1 & 0x00040000) >> 18);
+            hrate = (u8)((rd_dat1 & 0x00000080) >> 7);
+            qrate = (u8)((rd_dat1 & 0x00000040) >> 6);
+            if_mode = (u8)((rd_dat1 & 0x00000030) >> 4);
+        } else {
+            /* Reading 1G MACRO */
+            VTSS_RC(vtss_phy_mcb_rd_trig_private(vtss_state, phy_id.base_port_no, 0x20, 0));     // read 1G MCB into CSRs
+            VTSS_RC(vtss_phy_sd6g_csr_reg_rd_dbg_private(vtss_state, port_no, 0x17, &rd_dat));   // PLL_CFG
+            VTSS_RC(vtss_phy_sd6g_csr_reg_rd_dbg_private(vtss_state, port_no, 0x16, &rd_dat1));  // COMMON_CFG
+            VTSS_D("VIPER/ELISE: HW Settings for port: %d, base_port: %d, MACRO_CTRL::SERDES1G_PLL_CFG: 0x%08x;  SERDES1G_COMMON_CFG: 0x%08x",
+                   port_no, phy_id.base_port_no, rd_dat, rd_dat1);
+            pll_fsm_ena = (u8) ((rd_dat & 0x00000080) >> 7);
+            sys_rst = (u8)((rd_dat1 & 0x80000000) >> 31);
+            ena_lane = (u8)((rd_dat1 & 0x00040000) >> 18);
+            hrate = (u8)((rd_dat1 & 0x00000080) >> 7);
+            qrate = 1;  /* No Qrate for SGMII - Hard code just to be different than QSGMII */
+            if_mode = (u8)((rd_dat1 & 0x00000001));
+        }
 
-        VTSS_RC(vtss_phy_mcb_rd_trig_private(vtss_state, phy_id.base_port_no, 0x3f, 0)); // read 6G MCB into CSRs
-        VTSS_RC(vtss_phy_macsec_csr_rd_private(vtss_state, phy_id.base_port_no, 7, 0x2c, &rd_dat)); // MACRO_CTRL::SERDES1G_COMMON_CFG
-        sys_rst = (u8)((rd_dat & 0x80000000) >> 31);
-        ena_lane = (u8)((rd_dat & 0x00040000) >> 18);
-        hrate = (u8)((rd_dat & 0x00000080) >> 7);
-        qrate = (u8)((rd_dat & 0x00000040) >> 6);
-        if_mode = (u8)((rd_dat & 0x00000030) >> 4);
+        VTSS_D("VIPER/ELISE: HW Settings for port: %d, base_port: %d, mac_if_19G: 0x%x, hrate:%d, qrate: %d, if_mode:%d, pll_fsm_ena:%d, ena_lane:%d, sys_rst:%d ",
+               port_no, phy_id.base_port_no, mac_if_19G, hrate, qrate, if_mode, pll_fsm_ena, ena_lane, sys_rst);
 
         // Check to see if it's enabled
         if ((sys_rst == 0x1) && (ena_lane == 0x1) && (pll_fsm_ena == 0x1)) {
@@ -5155,7 +5313,6 @@ static vtss_rc vtss_phy_tesla_serdes_6g_conf_private(vtss_state_t *vtss_state, v
         // Modify bits 104-106, Update ib_vbcom to value of: 2, Default value is: 4
         VTSS_RC(patch_array_set_value(vtss_state, port_no, VTSS_TESLA_SERDES6G_ANA_CFG_IB_VBCOM_6G + 2, VTSS_TESLA_SERDES6G_ANA_CFG_IB_VBCOM_6G, 0x2)); // bits 104-106
 
-
         // Write out the MCB - 6G Macro
         micro_cmd = 0x9c40;
         VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));       // Switch back to micro/GPIO register-page
@@ -5217,8 +5374,9 @@ static vtss_rc vtss_phy_tesla_serdes_conf_private(vtss_state_t *vtss_state, vtss
 
     chip_port_no = vtss_phy_chip_port(vtss_state, port_no);
 
-    if(vtss_state->sync_calling_private)
+    if (vtss_state->sync_calling_private) {
         return VTSS_RC_OK;
+    }
 
     switch (ps->family) {
     case VTSS_PHY_FAMILY_TESLA :
@@ -6004,6 +6162,7 @@ static vtss_rc vtss_phy_mac_media_if_tesla_setup(vtss_state_t *vtss_state, const
     BOOL                   mac_if_match = FALSE;
     BOOL                   media_if_match = FALSE;
     BOOL                   mac_if_has_chged_in_sw = FALSE;
+    BOOL                   oos_recov_enabled = FALSE;
 #if defined(VTSS_FEATURE_SERDES_MACRO_SETTINGS)
     BOOL                   mac_if_serdes_patch_init = FALSE;
     vtss_phy_port_state_t *ps = &vtss_state->phy_state[port_no];
@@ -6104,6 +6263,24 @@ static vtss_rc vtss_phy_mac_media_if_tesla_setup(vtss_state_t *vtss_state, const
         }
 
         VTSS_D("port_no %u, mac_if_match = 0x%x FORCE_RESET: 0x%x\n", port_no, mac_if_match, *force_reset );
+
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+#if defined(TESLA_ING_TS_ERRFIX)
+        if ((ps->family == VTSS_PHY_FAMILY_TESLA) &&
+            ((ps->type.part_number == VTSS_PHY_TYPE_8572) || (ps->type.part_number == VTSS_PHY_TYPE_8574))) {
+
+            oos_recov_enabled = vtss_phy_ts_is_oos_recovery_enabled_private(vtss_state, port_no);
+
+            /* *********************************************************************************** */
+            /* If we ran OOS Recovery, Force it to go thru Media Setup logic                       */
+            /* *********************************************************************************** */
+            if (oos_recov_enabled) {
+                VTSS_D("port_no %u, Tesla OOS_Recovery Early Exit Detected: FORCING_PHY_RESET\n", port_no);
+                media_if_match = FALSE;
+            }
+        }
+#endif
+#endif
 
         if (mac_if_match && media_if_match) {
             VTSS_I("VTSS_PHY_NOFORCE_RESET:: port_no %u, mac_if_match = TRUE, media_if_match = TRUE ", port_no);
@@ -6258,18 +6435,34 @@ static vtss_rc vtss_phy_mac_media_if_tesla_setup(vtss_state_t *vtss_state, const
 #endif
 
 #if defined(VTSS_FEATURE_SERDES_MACRO_SETTINGS) && defined (TESLA_ING_TS_ERRFIX)
+
         if (ps->family == VTSS_PHY_FAMILY_TESLA) {
             // This also gets called by Phy_Reset_Private during Media chg sequence, with 2nd Param=TRUE
             // If 2nd param = TRUE, then configure FIBER MEDIA ONLY, i.e. NO MAC i/f SerDes Chgs
             // If 2nd param = FALSE, then configure MAC & FIBER MEDIA (if Fiber is present)
-            VTSS_RC(vtss_phy_tesla_serdes_conf_private(vtss_state, port_no, VTSS_PHY_SERDES_INIT_MAC));
+            // The Micro-Patches which match these CRC values have defined the compilation flag: VTSS_PHY_TS_SPI_CLK_THRU_PPS0
+            // and support NEW-SPI-MODE, which was only required for Silicon Rev. B/C of the Tesla PHY due to HW Workaround.
+            // It is supported and required for Rev. B/C of Tesla.
+            // In Later versions of Tesla Silicon, the HW bug was fixed.
+            // This work-around option is no longer required.  It is supported, but NOT required, and is configured at run-time.
+            // Therefore, the compiliation flag: VTSS_PHY_TS_SPI_CLK_THRU_PPS0  is Normally NOT Defined unless Rev. C silicon
+            // (or earlier) are in use.
+            if ((vtss_state->phy_state[port_no].micro_patch_crc == 0x042C) ||
+                (vtss_state->phy_state[port_no].micro_patch_crc == 0xA44A)) {
+                VTSS_I("MAC_IF: SERDES_CONFIG by API:: port_no %u", port_no);
+                VTSS_RC(vtss_phy_tesla_serdes_conf_private(vtss_state, port_no, VTSS_PHY_SERDES_INIT_MAC));
+            } else {
+                VTSS_I("MAC_IF: SERDES_CONFIG by Internal Micro-Patch:: port_no %u", port_no);
+            }
         }
+
 #endif
 
     }
     VTSS_MSLEEP(10);
 
-    if (!vtss_state->sync_calling_private) {
+    /* If OOS Recovery is enabled, then must execute the media reconfig */
+    if ((!vtss_state->sync_calling_private) || oos_recov_enabled) {
         if (conf->media_if == VTSS_PHY_MEDIA_IF_CU) {
             // Setup media in micro program.
             VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));
@@ -6281,6 +6474,7 @@ static vtss_rc vtss_phy_mac_media_if_tesla_setup(vtss_state_t *vtss_state, const
             VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_MICRO_PAGE, 0x80e1 | (0x0100 << (vtss_phy_chip_port(vtss_state, port_no) % 4))));
             VTSS_RC(vtss_phy_wait_for_micro_complete(vtss_state, port_no));
             VTSS_MSLEEP(10);
+            VTSS_I("port_no: %u, VTSS_PHY_MEDIA_IF_CU: MEDIA_Operating_mode:%u, conf.media_if:%u", port_no, media_operating_mode, conf->media_if);
         } else {
             // Setup media in micro program. Bit 8-11 is bit for the corresponding port (See TN1080)
             VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));
@@ -6288,6 +6482,7 @@ static vtss_rc vtss_phy_mac_media_if_tesla_setup(vtss_state_t *vtss_state, const
             VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_MICRO_PAGE, 0x80C1 | (0x0100 << (vtss_phy_chip_port(vtss_state, port_no) % 4)) | micro_cmd_100fx));
             VTSS_RC(vtss_phy_wait_for_micro_complete(vtss_state, port_no));
             VTSS_MSLEEP(10);
+            VTSS_I("port_no: %u, SFP: MEDIA_Operating_mode:%u, conf.media_if:%u", port_no, media_operating_mode, conf->media_if);
         }
     }
     // Setup Media interface
@@ -6298,7 +6493,7 @@ static vtss_rc vtss_phy_mac_media_if_tesla_setup(vtss_state_t *vtss_state, const
     reg_mask  = VTSS_M_PHY_EXTENDED_PHY_CONTROL_MEDIA_OPERATING_MODE | VTSS_F_PHY_EXTENDED_PHY_CONTROL_AMS_PREFERENCE;
 
     VTSS_RC(VTSS_PHY_WARM_WR_MASKED(vtss_state, port_no, VTSS_PHY_EXTENDED_PHY_CONTROL, reg_val, reg_mask));
-    VTSS_D("media_operating_mode:%d, media_if:%d", media_operating_mode, conf->media_if);
+    VTSS_I("port_no: %u,  MEDIA_Operating_mode:%u, conf.media_if:%u", port_no, media_operating_mode, conf->media_if);
 
     //Set packet mode
     VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
@@ -8152,12 +8347,14 @@ static vtss_rc vtss_phy_detect_base_ports_private(vtss_state_t *vtss_state)
 vtss_rc vtss_phy_post_reset_private(vtss_state_t *vtss_state, const vtss_port_no_t port_no)
 {
     vtss_phy_port_state_t *ps = &vtss_state->phy_state[port_no];
+
+#if 0  // The following code functionality has been moved to vtss_phy_reset function.
 #if defined(VTSS_FEATURE_SERDES_MACRO_SETTINGS)
     vtss_phy_reset_conf_t *conf = &ps->reset;
     vtss_port_no_t         port_idx;
     vtss_phy_type_t        phy_id;
-    BOOL                   mac_if_serdes_init = FALSE; // Signaling Serdes micro-patch init status by reading HW */
-    BOOL                   mac_if_serdes_patch_init = FALSE; // Signaling Serdes micro-patch init status by reading HW */
+    BOOL                   mac_if_serdes_init = FALSE; // Signaling Serdes micro-patch init status by reading HW
+    BOOL                   mac_if_serdes_patch_init = FALSE; // Signaling Serdes micro-patch init status by reading HW
 #ifdef _ENABLE_PHY_SERDES_DEBUG_
     u32                    csr_reg;
     u32                    csr_reg_val;
@@ -8217,7 +8414,7 @@ vtss_rc vtss_phy_post_reset_private(vtss_state_t *vtss_state, const vtss_port_no
     default:
         VTSS_D("No sd6g SerDes post-initialising needed for family:%s, port = %d", vtss_phy_family2txt(ps->family), port_no);
     }
-
+#endif
 
     switch (ps->family) {
     case VTSS_PHY_FAMILY_ATOM:
@@ -8234,8 +8431,12 @@ vtss_rc vtss_phy_post_reset_private(vtss_state_t *vtss_state, const vtss_port_no
         } else {
             VTSS_RC(vtss_phy_coma_mode_private(vtss_state, port_no, TRUE));
         }
+
 #else
-        VTSS_RC(vtss_phy_coma_mode_private(vtss_state, port_no, TRUE));
+        /* COMA mode should only be changed during COLD Start - not during phy_sync of WARMSTART */
+        if (vtss_state->sync_calling_private == FALSE) {
+            VTSS_RC(vtss_phy_coma_mode_private(vtss_state, port_no, TRUE));
+        }
 #endif//VTSS_ARCH_JAGUAR_2
         break;
     default:
@@ -8624,6 +8825,15 @@ vtss_rc vtss_phy_reset_private(vtss_state_t *vtss_state, const vtss_port_no_t po
     vtss_phy_reset_conf_t *conf = &ps->reset;
     u16                    reg;
     BOOL                   force_reset = TRUE;
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+#if defined(TESLA_ING_TS_ERRFIX)
+    BOOL    oos_recov_enabled = FALSE;
+#if defined(VTSS_FEATURE_WARM_START)
+    BOOL    warm_start_cur_save = vtss_state->warm_start_cur;
+#endif  /* VTSS_FEATURE_WARM_START    */
+#endif  /* TESLA_ING_TS_ERRFIX */
+#endif  /* VTSS_FEATURE_PHY_TIMESTAMP */
+
 
 #if defined(AQR_CHIP_CU_PHY)
     if (AQR_PHY_FAMILY(port_no)) {
@@ -8643,6 +8853,46 @@ vtss_rc vtss_phy_reset_private(vtss_state_t *vtss_state, const vtss_port_no_t po
     }
 #endif
 
+/* The following code is for the following ERROR condition: */
+/* The PHY programmed and running the Tesla OOS Patch       */
+/* However, for whatever reason, the Application Restarts   */
+/* This could be due to Warmstart or due to Application Restart */
+/* The Link is DOWN, as the Tesla PHY was isolated to run OOS   */ 
+/* For Warmstart, the sequences is: Configure the PHY INST  */
+/* (not writing thru to PHY HW Registers), then Synchronize the SW and HW */
+/* In this scenario, We need to enable the write-thru to the PHY Registers */
+/* to reconfigure the PHY per the settings being provided to elminate errors during Sync */
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+#if defined(TESLA_ING_TS_ERRFIX)
+    if ((ps->family == VTSS_PHY_FAMILY_TESLA) &&
+        ((ps->type.part_number == VTSS_PHY_TYPE_8572) || (ps->type.part_number == VTSS_PHY_TYPE_8574))) {
+
+        oos_recov_enabled = vtss_phy_ts_is_oos_recovery_enabled_private(vtss_state, port_no);
+
+        /* *********************************************************************************** */
+        /* The following code checks Config to see if there was an Early Exit previously       */
+        /* *********************************************************************************** */
+        if (oos_recov_enabled) {
+            vtss_debug_printf_t pr = (vtss_debug_printf_t) printf;
+            /* This function checks ALL of the above settings.  */
+            /* If settings prevent traffic flow, they are changes to allow traffic */
+            /* This does NOT reconfigure the 1588 Engine                           */
+            if (vtss_phy_ts_tesla_oos_recovery_disable_priv(vtss_state, port_no, pr) == VTSS_RC_OK) {
+#if defined(VTSS_FEATURE_WARM_START)
+                VTSS_I("Tesla OOS Recovery Enabled, Reg30.13 set: WS: 0x%x;  Clearing  OOS Recovery Config and WARM-START Setting; Setting for Write-Thru to Registers port_no = %d", vtss_state->warm_start_cur, port_no);
+                vtss_state->warm_start_cur = FALSE;
+#else
+                VTSS_I("Tesla OOS Recovery was Enabled, Reg30.13 set: WS: 0x%x;  Clearing OOS Recovery Config, port_no = %d", vtss_state->warm_start_cur, port_no);
+#endif
+            } else {
+                VTSS_E("Tesla OOS Recovery was Enabled, Reg30.13 set: Unable to Clear OOS Recovery Config, WS: 0x%x; port_no = %d", vtss_state->warm_start_cur, port_no);
+                return VTSS_RC_ERROR;
+            }
+        }
+    }
+#endif
+#endif
+
     // Don't signal link down if doing warm start
     if (!vtss_state->sync_calling_private) {
 
@@ -8658,11 +8908,6 @@ vtss_rc vtss_phy_reset_private(vtss_state_t *vtss_state, const vtss_port_no_t po
             ps->link_down_due_to_port_reset = FALSE;
         }
     }
-
-    //Set 1588 Bypass before performing reset.
-#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
-    VTSS_RC(vtss_phy_ts_bypass_set(vtss_state, port_no, TRUE, FALSE));
-#endif
 
     /* -- Step 2: Pre-reset setup of MAC and Media interface -- */
     switch (ps->family) {
@@ -8787,6 +9032,13 @@ vtss_rc vtss_phy_reset_private(vtss_state_t *vtss_state, const vtss_port_no_t po
         }
         break;
     }
+
+    //Set 1588 Bypass before performing reset, but not during Warmstart sequence #if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+    if (!vtss_state->sync_calling_private) {
+        VTSS_RC(vtss_phy_ts_bypass_set(vtss_state, port_no, TRUE, FALSE));
+    }
+#endif
 
     /* -- Step 3: Reset PHY -- */
     VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
@@ -8918,7 +9170,12 @@ vtss_rc vtss_phy_reset_private(vtss_state_t *vtss_state, const vtss_port_no_t po
             VTSS_RC(VTSS_PHY_WARM_WR(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8fa4));
             VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
         }
+
+        /* Bz#23788 Work-Around for 100BT Link break Issue, after restoring link it does not come up for a long time. */
+        /* This only currently applies to Families VIPER and NANO */
+        VTSS_RC(vtss_phy_100BaseT_long_linkup_workaround(vtss_state, port_no, TRUE));
     }
+
     // Intentionally Fall thru to Elise.... because Elise is Cu only
 
     case VTSS_PHY_FAMILY_ELISE:
@@ -8929,6 +9186,7 @@ vtss_rc vtss_phy_reset_private(vtss_state_t *vtss_state, const vtss_port_no_t po
     case VTSS_PHY_FAMILY_TESLA:
         if (force_reset) {
 #if defined(VTSS_FEATURE_SERDES_MACRO_SETTINGS) && defined (TESLA_ING_TS_ERRFIX)
+
             // If this is Fiber Media, Need to add the SerDes configuration here for Media Operating Mode switching
             // This gets called by Phy_Post_Reset also during the init sequence, with 2nd Param=FALSE
             // If 2nd param = TRUE, then configure FIBER MEDIA ONLY
@@ -8936,6 +9194,7 @@ vtss_rc vtss_phy_reset_private(vtss_state_t *vtss_state, const vtss_port_no_t po
 
             if (ps->family == VTSS_PHY_FAMILY_TESLA) {   /* Because of the fall thru on the switch-case statement, check for TESLA only */
                 if (is_fiber_port(conf)) {
+                    VTSS_I("MEDIA_IF: SERDES_CONFIG by API:: port_no %u", port_no);
                     VTSS_RC(vtss_phy_tesla_serdes_conf_private(vtss_state, port_no, VTSS_PHY_SERDES_INIT_MEDIA));
                 }
             }
@@ -8943,16 +9202,14 @@ vtss_rc vtss_phy_reset_private(vtss_state_t *vtss_state, const vtss_port_no_t po
 
 #if defined(VTSS_FEATURE_PHY_TIMESTAMP)
 #ifdef TESLA_ING_TS_ERRFIX
+
 #ifdef VTSS_TS_FIFO_MEDIA_SWAP_SYNC
             vtss_phy_ts_fifo_conf_t   fifo_conf_tesla;
             vtss_debug_printf_t       func_printf;
             BOOL OOS = FALSE;
             vtss_rc rc;
 
-            memset(&fifo_conf_tesla, 0, sizeof(vtss_phy_ts_fifo_conf_t));
-            fifo_conf_tesla.detect_only = FALSE;
-            fifo_conf_tesla.eng_recov = VTSS_PHY_TS_PTP_ENGINE_ID_0;
-            fifo_conf_tesla.eng_minE = VTSS_PHY_TS_OAM_ENGINE_ID_2B;
+            VTSS_RC(vtss_phy_default_fifo_conf_tesla_oos_get(vtss_state, port_no, &fifo_conf_tesla));
 
 #ifdef VTSS_TS_FIFO_SYNC_MINIMIZE_OUTPUT
             func_printf = dummy_printf;
@@ -8966,20 +9223,51 @@ vtss_rc vtss_phy_reset_private(vtss_state_t *vtss_state, const vtss_port_no_t po
                 if ((rc = vtss_phy_ts_tesla_tsp_fifo_sync_private(vtss_state, port_no, func_printf, &fifo_conf_tesla, &OOS)) != VTSS_RC_OK) {
                     VTSS_E("TESLA TSP_FIFO SYNC Failed. port_no: %d, OOS = %u\n", port_no, OOS);
                 }
-          
+
                 /* Switch over back from 8051 middle man approach - Done in above API */
                 vtss_state->rd_ts_fifo = FALSE;
             }
 #endif /* VTSS_TS_FIFO_MEDIA_SWAP_SYNC */
-#endif /* TESLA_ING_TS_ERRFIX */
+
+            /* If Tesla OOS was being run and was interrupted by an Application Restart, Restore the previous warmstart settings */
+            /* The Tesal MAC/Media was reprogrammed, now the rest of the setup should be the same an normal warmstart  */
+#if defined(VTSS_FEATURE_WARM_START)
+            if ((ps->family == VTSS_PHY_FAMILY_TESLA) &&
+                ((ps->type.part_number == VTSS_PHY_TYPE_8572) || (ps->type.part_number == VTSS_PHY_TYPE_8574))) {
+
+                if (oos_recov_enabled) {
+                    vtss_state->warm_start_cur = warm_start_cur_save;
+                    VTSS_I("Tesla OOS Recovery Enabled, Reg30.13 set: Restoring WARM-START Settings: WS:%x port_no = %d",
+                             vtss_state->warm_start_cur, port_no);
+                }
+            }
+#endif /* VTSS_FEATURE_WARM_START    */
+
+#endif /* TESLA_ING_TS_ERRFIX        */
 #endif /* VTSS_FEATURE_PHY_TIMESTAMP */
         }
+
+#if defined(VTSS_FEATURE_EEE)
+        VTSS_RC(vtss_phy_eee_ena_private(vtss_state, port_no));
+#endif
+        /* Bz#23788 Work-Around for 100BT Link break Issue, after restoring link it does not come up for a long time. */
+        /* This only currently applies to Families VIPER and NANO and Tesla Rev. E */
+        if ((ps->family == VTSS_PHY_FAMILY_TESLA) && (ps->type.revision == VTSS_PHY_TESLA_REV_E)) {
+            VTSS_RC(vtss_phy_100BaseT_long_linkup_workaround(vtss_state, port_no, TRUE));
+        }
+        break;
+
     case VTSS_PHY_FAMILY_NANO:
 #if defined(VTSS_FEATURE_EEE)
         VTSS_RC(vtss_phy_eee_ena_private(vtss_state, port_no));
 #endif
+        /* Bz#23788 Work-Around for 100BT Link break Issue, after restoring link it does not come up for a long time. */
+        /* This only currently applies to Families VIPER and NANO */
+        VTSS_RC(vtss_phy_100BaseT_long_linkup_workaround(vtss_state, port_no, TRUE));
+
         // No init seq defined yet.
         break;
+
     case VTSS_PHY_FAMILY_ENZO:
         VTSS_RC(vtss_phy_init_seq_enzo(vtss_state, ps, port_no));
         break;
@@ -8989,6 +9277,13 @@ vtss_rc vtss_phy_reset_private(vtss_state_t *vtss_state, const vtss_port_no_t po
         break;
     }
     return VTSS_RC_OK;
+}
+
+static BOOL is_media_if_passthru(const vtss_phy_media_interface_t media_if)
+{
+    return media_if == VTSS_PHY_MEDIA_IF_SFP_PASSTHRU ||
+           media_if == VTSS_PHY_MEDIA_IF_AMS_FI_PASSTHRU ||
+           media_if == VTSS_PHY_MEDIA_IF_AMS_CU_PASSTHRU;
 }
 
 vtss_rc vtss_phy_conf_set_private(vtss_state_t *vtss_state,
@@ -9002,7 +9297,12 @@ vtss_rc vtss_phy_conf_set_private(vtss_state_t *vtss_state,
     vtss_phy_family_t     family;
     u16                   advertise_reg_bit_mask = 0;
     BOOL                  restart_aneg = FALSE;
+    BOOL                  oos_recov_enabled = FALSE;
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+#if defined(VIPER_B_FIFO_RESET)
     u16 is_power_down = 0;  //for OOS API shutdown case.
+#endif /* VTSS_FEATURE_PHY_TIMESTAMP */
+#endif /* VIPER_B_FIFO_RESET */
     /* Save setup */
     VTSS_D("enter, port_no: %u", port_no);
     family = ps->family;
@@ -9042,6 +9342,16 @@ vtss_rc vtss_phy_conf_set_private(vtss_state_t *vtss_state,
         }
 #endif
 
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+#if defined(TESLA_ING_TS_ERRFIX)
+        if ((ps->family == VTSS_PHY_FAMILY_TESLA) &&
+            ((ps->type.part_number == VTSS_PHY_TYPE_8572) || (ps->type.part_number == VTSS_PHY_TYPE_8574))) {
+
+            oos_recov_enabled = vtss_phy_ts_is_oos_recovery_enabled_private(vtss_state, port_no);
+        }
+#endif
+#endif
+
         // Read the current MDI Settings before changing any config
         VTSS_RC(vtss_phy_page_ext(vtss_state, port_no));
         VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_MODE_CONTROL, &prev_mdi_value));
@@ -9064,7 +9374,7 @@ vtss_rc vtss_phy_conf_set_private(vtss_state_t *vtss_state,
                              ((conf->aneg.speed_10m_hdx ? 1 : 0) << 5) |
                              (1 << 0));
 
-            if (reset_conf->media_if == VTSS_PHY_MEDIA_IF_SFP_PASSTHRU) {
+            if (is_media_if_passthru(reset_conf->media_if)) {
                 advertise_reg_bit_mask = 0xac1f; // In Pass though mode the advertisement is done in the cu SFP.
             } else {
                 advertise_reg_bit_mask = 0xbfff;// Bit 14 is reserved.
@@ -9112,7 +9422,7 @@ vtss_rc vtss_phy_conf_set_private(vtss_state_t *vtss_state,
             }
             /* bug 17917: */
             /* For 1000BaseT-HDX, although allowed per 802.3, is not supported in industry */
-            /* We are unaware of anyone making a Gigabit Ethernet hub, so testing 1000BT hdx with any vendor’s L2 device may be problematic. */
+            /* We are unaware of anyone making a Gigabit Ethernet hub, so testing 1000BT hdx with any vendor's L2 device may be problematic. */
             if (conf->aneg.speed_1g_hdx) {
                 new_reg_value |= VTSS_PHY_1000BASE_T_CONTROL_1000BASE_T_HDX_CAPABILITY;
             }
@@ -9161,10 +9471,10 @@ vtss_rc vtss_phy_conf_set_private(vtss_state_t *vtss_state,
 #if defined(VTSS_FEATURE_MACSEC)
             if (!vtss_state->macsec_conf[port_no].glb.init.enable) {
 #endif
-            VTSS_RC(PHY_RD_PAGE(vtss_state, port_no,VTSS_PHY_MODE_CONTROL, &is_power_down));
-            if(is_power_down & VTSS_F_PHY_MODE_CONTROL_POWER_DOWN){
-                VTSS_RC(vtss_phy_ts_isolate_phy(vtss_state, port_no));
-            }
+                VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_MODE_CONTROL, &is_power_down));
+                if (is_power_down & VTSS_F_PHY_MODE_CONTROL_POWER_DOWN) {
+                    VTSS_RC(vtss_phy_ts_isolate_phy(vtss_state, port_no));
+                }
 #if defined(VTSS_FEATURE_MACSEC)
             }
 #endif
@@ -9172,7 +9482,7 @@ vtss_rc vtss_phy_conf_set_private(vtss_state_t *vtss_state,
 #endif
             /* Use register 0 to restart auto negotiation */
             // Don't restart auton-neg at warm start if something has changed
-            if (!vtss_state->sync_calling_private && restart_aneg) {
+            if ((!vtss_state->sync_calling_private || oos_recov_enabled) && restart_aneg) {
                 VTSS_RC(VTSS_PHY_WARM_WR_MASKED(vtss_state, port_no, VTSS_PHY_MODE_CONTROL,
                                                 VTSS_F_PHY_MODE_CONTROL_AUTO_NEG_ENA | VTSS_F_PHY_MODE_CONTROL_RESTART_AUTO_NEG,
                                                 VTSS_F_PHY_MODE_CONTROL_AUTO_NEG_ENA | VTSS_F_PHY_MODE_CONTROL_RESTART_AUTO_NEG | VTSS_F_PHY_MODE_CONTROL_POWER_DOWN));
@@ -9184,10 +9494,10 @@ vtss_rc vtss_phy_conf_set_private(vtss_state_t *vtss_state,
                                                 VTSS_F_PHY_MODE_CONTROL_AUTO_NEG_ENA | VTSS_F_PHY_MODE_CONTROL_POWER_DOWN));
             }
 
-                //In case of PHY's supporting 1588 we need to clear bypass after no shut operation.
+            //In case of PHY's supporting 1588 we need to clear bypass after no shut operation.
 #if defined(VTSS_FEATURE_PHY_TIMESTAMP)
 #if defined(VIPER_B_FIFO_RESET)
-            if(is_power_down & VTSS_F_PHY_MODE_CONTROL_POWER_DOWN){
+            if (is_power_down & VTSS_F_PHY_MODE_CONTROL_POWER_DOWN) {
                 vtss_phy_ts_fifo_conf_t fifo_conf_viper;
                 memset(&fifo_conf_viper, 0, sizeof(vtss_phy_ts_fifo_conf_t));
                 //Private API takes care of MACsec case(Algorithm is not executed in Macsec Case)
@@ -9200,7 +9510,7 @@ vtss_rc vtss_phy_conf_set_private(vtss_state_t *vtss_state,
             break;
 
         case VTSS_PHY_MODE_FORCED:
-            if (reset_conf->media_if == VTSS_PHY_MEDIA_IF_SFP_PASSTHRU) {
+            if (is_media_if_passthru(reset_conf->media_if)) {
                 VTSS_D("port: %d; VTSS_PHY_MODE_FORCED: media_if = VTSS_PHY_MEDIA_IF_SFP_PASSTHRU", port_no);
             } else {
 #if defined(VTSS_FEATURE_PHY_TIMESTAMP)
@@ -9208,8 +9518,8 @@ vtss_rc vtss_phy_conf_set_private(vtss_state_t *vtss_state,
 #if defined(VTSS_FEATURE_MACSEC)
                 if (!vtss_state->macsec_conf[port_no].glb.init.enable) {
 #endif
-                    VTSS_RC(PHY_RD_PAGE(vtss_state, port_no,VTSS_PHY_MODE_CONTROL, &is_power_down));
-                    if(is_power_down & VTSS_F_PHY_MODE_CONTROL_POWER_DOWN){
+                    VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_MODE_CONTROL, &is_power_down));
+                    if (is_power_down & VTSS_F_PHY_MODE_CONTROL_POWER_DOWN) {
                         VTSS_RC(vtss_phy_ts_isolate_phy(vtss_state, port_no));
                     }
 #if defined(VTSS_FEATURE_MACSEC)
@@ -9347,7 +9657,7 @@ vtss_rc vtss_phy_conf_set_private(vtss_state_t *vtss_state,
             } // End of !VTSS_PHY_MEDIA_IF_SFP_PASSTHRU
 #if defined(VTSS_FEATURE_PHY_TIMESTAMP)
 #if defined(VIPER_B_FIFO_RESET)
-            if(is_power_down & VTSS_F_PHY_MODE_CONTROL_POWER_DOWN){
+            if (is_power_down & VTSS_F_PHY_MODE_CONTROL_POWER_DOWN) {
                 vtss_phy_ts_fifo_conf_t fifo_conf_viper;
                 memset(&fifo_conf_viper, 0, sizeof(vtss_phy_ts_fifo_conf_t));
                 //Private API takes care of MACsec case(Algorithm is not executed in Macsec Case)
@@ -9438,7 +9748,7 @@ vtss_rc vtss_phy_conf_set_private(vtss_state_t *vtss_state,
             VTSS_RC(vtss_phy_event_enable_private(vtss_state, port_no));
         }
 
-        if (reset_conf->media_if == VTSS_PHY_MEDIA_IF_SFP_PASSTHRU) {
+        if (is_media_if_passthru(reset_conf->media_if))  {
             VTSS_D("port: %d; media_if = VTSS_PHY_MEDIA_IF_SFP_PASSTHRU, Configuring SFP", port_no);
             VTSS_RC(vtss_phy_pass_through_speed_mode(vtss_state, port_no));
         } else {
@@ -9499,6 +9809,20 @@ vtss_rc vtss_phy_conf_set_private(vtss_state_t *vtss_state,
                 break;
             }
         }
+
+        /* Force AMS Override: Reg23.7:6 - 0:Normal; 1:SerDes; 2:Copper */
+        switch (ps->family) {
+        case VTSS_PHY_FAMILY_TESLA:
+        case VTSS_PHY_FAMILY_VIPER:
+            VTSS_RC(VTSS_PHY_WARM_WR_MASKED(vtss_state, port_no, VTSS_PHY_EXTENDED_PHY_CONTROL,
+                                          VTSS_F_PHY_EXTENDED_PHY_CONTROL_AMS_OVERRIDE(conf->force_ams_sel),
+                                          VTSS_M_PHY_EXTENDED_PHY_CONTROL_AMS_OVERRIDE));
+            break;
+
+       default:
+            break;
+       }
+
         /* Set Sigdet pin polarity active high/low. Reg19E1.0 */
         switch (conf->sigdet) {
         case VTSS_PHY_SIGDET_POLARITY_ACT_LOW:
@@ -10198,7 +10522,6 @@ vtss_rc vtss_phy_status_get_private(vtss_state_t *vtss_state,
             /* Read status again if link down (latch low field) */
             VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_MODE_STATUS, &reg));
             status->link = (reg & (1 << 2) ? 1 : 0);
-            status->link_down = (reg & (1 << 2) ? 0 : 1);
             VTSS_N("status->link = %d, port = %d, reg = 0x%X", status->link, port_no, reg);
         } else {
             status->link = 1;
@@ -10218,18 +10541,25 @@ vtss_rc vtss_phy_status_get_private(vtss_state_t *vtss_state,
         }
 
         if (status->link) {
-            switch (ps->setup.mode) {
+            /* Cobra's near-end loopback operates as force mode no matter ANEG is set or not, the behavior is the same as SMB6000. */
+            vtss_phy_mode_t setup_mode = (ps->family == VTSS_PHY_FAMILY_COBRA && ps->loopback.near_end_enable &&
+                                          ps->setup.mode != VTSS_PHY_MODE_POWER_DOWN) ?  VTSS_PHY_MODE_FORCED : ps->setup.mode;
+            switch (setup_mode) {
             case VTSS_PHY_MODE_ANEG:
                 if ((reg & (1 << 5)) == 0) {
                     VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_AUXILIARY_CONTROL_AND_STATUS, &reg));
                     status->mdi_cross = ((reg & VTSS_F_PHY_AUXILIARY_CONTROL_AND_STATUS_HP_AUTO_MDIX_CROSSOVER_INDICATION) ? TRUE : FALSE);
                     /* Workaround to have SW aware 100FX link up state for VSC8664*/
+                    // Link up can not be trusted if auto-neg has not completed.
                     if ((reg & 0x1b) != 0xa) {
                         /* Auto negotiation not complete, link considered down */
                         status->link = 0;
                     } else {
-                        status->speed = VTSS_SPEED_100M;
-                        status->fdx = 1;
+                        if (ps->family == VTSS_PHY_FAMILY_ENZO) {
+                            /* Workaround to have SW aware 100FX link up state for VSC8664*/
+                            status->speed = VTSS_SPEED_100M;
+                            status->fdx = 1;
+                        }
                     }
                 }
 
@@ -10270,6 +10600,27 @@ vtss_rc vtss_phy_status_get_private(vtss_state_t *vtss_state,
                 if (ps->family == VTSS_PHY_FAMILY_NONE) {
                     status->speed = ps->setup.forced.speed;
                     status->fdx = ps->setup.forced.fdx;
+                } else if (ps->family == VTSS_PHY_FAMILY_COBRA && ps->loopback.near_end_enable) {
+                    /* Cobra's near-end loopback operates as force mode no matter ANGE is set or not,
+                     * speed refer to MII register 0 and always set to FDX */
+                    VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_MODE_CONTROL, &reg));
+                    switch (((reg >> 6) << 1 & (reg >> 13)) & 0x3) {
+                    case 0:
+                        status->speed = VTSS_SPEED_10M;
+                        break;
+                    case 1:
+                        status->speed = VTSS_SPEED_100M;
+                        break;
+                    case 2:
+                        status->speed = VTSS_SPEED_1G;
+                        break;
+                    case 3:
+                        status->speed = VTSS_SPEED_UNDEFINED;
+                        break;
+                    }
+                    /* set FDX for loopback */
+                    status->fdx = 1;
+
                 } else {
                     switch ((reg >> 3) & 0x3) {
                     case 0:
@@ -10417,10 +10768,7 @@ vtss_rc vtss_phy_status_get_private(vtss_state_t *vtss_state,
                 OOS = FALSE;
                 vtss_state->rd_ts_fifo = TRUE;
 
-                memset(&fifo_conf_tesla, 0, sizeof(vtss_phy_ts_fifo_conf_t));
-                fifo_conf_tesla.detect_only = FALSE;
-                fifo_conf_tesla.eng_recov = VTSS_PHY_TS_PTP_ENGINE_ID_0;
-                fifo_conf_tesla.eng_minE = VTSS_PHY_TS_OAM_ENGINE_ID_2B;
+                VTSS_RC(vtss_phy_default_fifo_conf_tesla_oos_get(vtss_state, port_no, &fifo_conf_tesla));
 
 #ifdef VTSS_TS_FIFO_SYNC_MINIMIZE_OUTPUT
                 func_printf = dummy_printf;
@@ -10473,6 +10821,23 @@ vtss_rc vtss_phy_status_get_private(vtss_state_t *vtss_state,
                 break;
             }
 
+            /* Bz#23788 Work-Around for 100BT Link break Issue, after restoring link it does not come up for a long time. */
+            /* This only currently applies to Families VIPER and NANO and TESLA Rev. E Only */
+            switch (ps->family) {
+            case VTSS_PHY_FAMILY_TESLA:
+                if (ps->type.revision >= VTSS_PHY_TESLA_REV_E) {
+                    VTSS_RC(vtss_phy_100BaseT_long_linkup_workaround(vtss_state, port_no, TRUE));
+                }
+                break;
+
+            /* This only currently applies to Families VIPER and NANO, All revisions */
+            case VTSS_PHY_FAMILY_VIPER:
+            case VTSS_PHY_FAMILY_NANO :
+                VTSS_RC(vtss_phy_100BaseT_long_linkup_workaround(vtss_state, port_no, TRUE));
+                break;
+            default:
+                break;
+            }
         }
 
         /* Handle link up event */
@@ -10620,6 +10985,34 @@ vtss_rc vtss_phy_status_get_private(vtss_state_t *vtss_state,
             }
 #endif
 
+        }
+        /* Handle link down */
+        /* If the prev status was link down and current status is link down, then see if Long Link Work-Around applies  */
+        if (((!status->link || status->link_down) && !ps->status.link) &&
+              (conf->media_if == VTSS_PHY_MEDIA_IF_CU) &&
+              (ps->setup.mode == VTSS_PHY_MODE_FORCED) &&
+              (ps->setup.forced.speed == VTSS_SPEED_100M)) {
+
+            VTSS_D("link down, Copper, Forced Mode-100M on port_no %u, status->link = %d, status->link_down = %d, ps->status.link =%d",
+                   port_no, status->link, status->link_down, ps->status.link);
+
+            /* Bz#23788 Work-Around for 100BT Link break Issue, after restoring link it does not come up for a long time. */
+            /* This only currently applies to Families VIPER and NANO and TESLA Rev. E Only */
+            switch (ps->family) {
+            case VTSS_PHY_FAMILY_TESLA:
+                if (ps->type.revision >= VTSS_PHY_TESLA_REV_E) {
+                    VTSS_RC(vtss_phy_100BaseT_long_linkup_workaround(vtss_state, port_no, FALSE));
+                }
+                break;
+
+            /* This only currently applies to Families VIPER and NANO, All revisions */
+            case VTSS_PHY_FAMILY_VIPER:
+            case VTSS_PHY_FAMILY_NANO :
+                VTSS_RC(vtss_phy_100BaseT_long_linkup_workaround(vtss_state, port_no, FALSE));
+                break;
+            default:
+                break;
+            }
         }
 
         // Determine if it is a fiber or CU port
@@ -11085,6 +11478,10 @@ static vtss_rc vtss_phy_clock_conf_set_private(vtss_state_t *vtss_state,
             case 0x042C:  /* Tesla Rev D API 4.67.02 w/OOS enabled */
                 save_squelch_ctrl_addr = (clock_port == VTSS_PHY_RECOV_CLK1) ? 0x00ef : 0x00f0;
                 VTSS_D("\n%s: port %d  Squelch Addr: 0x00ef / 0x00f0 ", __FUNCTION__, port_no);
+                break;
+            case 0x18C8:  /* Tesla Rev D and later w/OOS enabled and NO support for NEW SPI MODE */
+                save_squelch_ctrl_addr = (clock_port == VTSS_PHY_RECOV_CLK1) ? 0x0022 : 0x0023;
+                VTSS_D("\n%s: port %d  Squelch Addr: 0x0022 / 0x0023 ", __FUNCTION__, port_no);
                 break;
             default:
                 save_squelch_ctrl_addr = (clock_port == VTSS_PHY_RECOV_CLK1) ? 0x002a : 0x002b;
@@ -11565,6 +11962,7 @@ vtss_rc vtss_phy_chip_temp_get_private (vtss_state_t   *vtss_state,
         rc = VTSS_RC_ERROR;
     }
 
+    VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
     return rc;
 }
 
@@ -11631,22 +12029,42 @@ vtss_rc vtss_phy_loopback_set_private(vtss_state_t *vtss_state,
     u8   phy_port_addr;
     u8   tmp_phy_port_addr;
     BOOL fiber = FALSE;
+   BOOL far_end_loopback_at_entry = FALSE;
 #if defined(AQR_CHIP_CU_PHY)
     if (AQR_PHY_FAMILY(port_no)) {
         rc = aqr_phy_loopback_set(vtss_state, port_no);
     } else {
 #endif
-
         // Get the PHY Physical Port
         phy_port_addr = vtss_phy_chip_port(vtss_state, port_no);
 
+        VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
+        VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_PHY_CONTROL, &reg_val));
+        if (reg_val & VTSS_F_PHY_EXTENDED_PHY_CONTROL_FAR_END_LOOPBACK_MODE) {
+            far_end_loopback_at_entry = TRUE;
+        }
+        VTSS_I("port_no: %d;   At Loopback_Entry_1: regVal:0x%04x", port_no, reg_val);
+
+        // Workaround for viper-B far-end loopback functionality, bug#24139
+        // Clear bit 22E3.13 before enabling far-end loopback for viper B.
+        if((ps->loopback.far_end_enable == TRUE) && (ps->type.revision == VTSS_PHY_VIPER_REV_B)){
+            VTSS_RC(vtss_phy_page_ext3(vtss_state, port_no));
+            VTSS_RC(VTSS_PHY_WARM_WR_MASKED(vtss_state, port_no, VTSS_PHY_MEDIA_SERDES_TX_CRC_ERROR_COUNTER, 0, VTSS_F_PHY_MEDIA_SERDES_TX_CRC_ERROR_COUNTER_TX_PREAMBLE_FIX));
+        }
         // FAR-End Loopback
         // Enable Far End Loopback, Set Reg23.3=1
         VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
         VTSS_RC(VTSS_PHY_WARM_WR_MASKED(vtss_state, port_no, VTSS_PHY_EXTENDED_PHY_CONTROL,
                                         (vtss_state->phy_state[port_no].loopback.far_end_enable ? VTSS_F_PHY_EXTENDED_PHY_CONTROL_FAR_END_LOOPBACK_MODE : 0),
                                         VTSS_F_PHY_EXTENDED_PHY_CONTROL_FAR_END_LOOPBACK_MODE)); // Far end Loopback
+        // Reset bit 22E3.13, if far-end loopback is disabled for viper B.
+        if((ps->loopback.far_end_enable == FALSE) && (ps->type.revision == VTSS_PHY_VIPER_REV_B)){
+            VTSS_RC(vtss_phy_page_ext3(vtss_state, port_no));
+            VTSS_RC(VTSS_PHY_WARM_WR_MASKED(vtss_state, port_no, VTSS_PHY_MEDIA_SERDES_TX_CRC_ERROR_COUNTER, VTSS_F_PHY_MEDIA_SERDES_TX_CRC_ERROR_COUNTER_TX_PREAMBLE_FIX,
+                                            VTSS_F_PHY_MEDIA_SERDES_TX_CRC_ERROR_COUNTER_TX_PREAMBLE_FIX));
+        }
 
+        VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
         // NEAR-End Loopback
         // Enable Near End Loopback, Set Reg0.14=1
         // Need to check for Media Interface type, For Fiber 1000BX, need to turn off ANEG
@@ -11716,6 +12134,58 @@ vtss_rc vtss_phy_loopback_set_private(vtss_state_t *vtss_state,
         VTSS_RC(VTSS_PHY_WARM_WR_MASKED(vtss_state, port_no, VTSS_PHY_BYPASS_CONTROL,
                                         (vtss_state->phy_state[port_no].loopback.connector_enable ? VTSS_F_PHY_BYPASS_CONTROL_DISABLE_PARI_SWAP_CORRECTION : 0),
                                         VTSS_F_PHY_BYPASS_CONTROL_DISABLE_PARI_SWAP_CORRECTION)); // Connector Loopback
+
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+#ifdef TESLA_ING_TS_ERRFIX
+#ifdef VTSS_TS_FIFO_SYNC_LOOPBACK
+        /* Run OOS Recovery after Removing FE Loopback */
+        /* far_end_loopback_at_entry = TRUE, But current HW config is OFF, so there was a Toggle of FE Loopback from On->OFF  */
+        /* Only Applies to Tesla with 1588,  All Tesla Older than Rev. E */
+        /* OOS Recovery cannot be active or we are calling back upon ourselves  */
+        if ((!vtss_state->phy_ts_port_conf[port_no].oos_recovery_active) && 
+            (far_end_loopback_at_entry) && (ps->family == VTSS_PHY_FAMILY_TESLA) && 
+            (((ps->type.part_number == VTSS_PHY_TYPE_8574) || (ps->type.part_number == VTSS_PHY_TYPE_8572)) &&
+             (ps->type.revision < VTSS_PHY_TESLA_REV_E))) {
+
+            VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_PHY_CONTROL, &reg_val));
+            VTSS_I("port_no: %d;   Entering OOS Check: VTSS_F_PHY_EXTENDED_PHY_CONTROL_FAR_END_LOOPBACK_MODE: 0x%x;  regVal:0x%04x", port_no,
+              (reg_val & VTSS_F_PHY_EXTENDED_PHY_CONTROL_FAR_END_LOOPBACK_MODE), reg_val);
+
+            // far_end_loopback_toggled
+            if ((reg_val & VTSS_F_PHY_EXTENDED_PHY_CONTROL_FAR_END_LOOPBACK_MODE) == 0) {
+                vtss_phy_ts_fifo_conf_t   fifo_conf_tesla;
+                vtss_debug_printf_t       func_printf;
+                BOOL OOS = FALSE;
+
+                /* turn on enable flag for "middleman" accesses throughout fifo_sync API - Done in this API */
+                vtss_state->rd_ts_fifo = TRUE;
+                VTSS_RC(vtss_phy_default_fifo_conf_tesla_oos_get(vtss_state, port_no, &fifo_conf_tesla));
+
+                VTSS_I("TESLA TSP_FIFO SYNC After Far-End Loopback removal. port_no: %d\n", port_no);
+
+#ifdef VTSS_TS_FIFO_SYNC_MINIMIZE_OUTPUT
+                func_printf = dummy_printf;
+#else
+                func_printf = (vtss_debug_printf_t)printf;
+#endif
+                if ((rc = vtss_phy_ts_tesla_tsp_fifo_sync_private(vtss_state, port_no, func_printf, &fifo_conf_tesla, &OOS)) != VTSS_RC_OK) {
+                    VTSS_E("TESLA TSP_FIFO SYNC Failed, After Far-End Loopback removal. port_no: %d,   OOS = %u\n", port_no, OOS);
+                }
+
+                /* Switch over back from 8051 middle man approach - Done in above API */
+                vtss_state->rd_ts_fifo = FALSE;
+
+            }
+
+            VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_PHY_CONTROL, &reg_val));
+            VTSS_I("port_no: %d;   AFTER OOS: VTSS_F_PHY_EXTENDED_PHY_CONTROL_FAR_END_LOOPBACK_MODE: 0x%x;  regVal:0x%04x", port_no,
+              (reg_val & VTSS_F_PHY_EXTENDED_PHY_CONTROL_FAR_END_LOOPBACK_MODE), reg_val);
+
+        }
+#endif /* VTSS_TS_FIFO_SYNC_LOOPBACK  */
+#endif /* TESLA_ING_TS_ERRFIX         */
+#endif /* VTSS_FEATURE_PHY_TIMESTAMP  */
+
 
         // If a Warmstart in progress, we do not want to change any of the MAC or Media Register settings
         // The MAC/MEDIA SerDes loopbacks will write to registers, Changing register settings to either turn loopback ON or OFF
@@ -12061,7 +12531,7 @@ static vtss_rc vtss_lcpll_tesla_status_get_private(vtss_state_t         *vtss_st
     if (status->fsm_stat != 6) {
         VTSS_I("Tesla/Atom12 LC-PLL FSM Status must be 6 for port:%d", port_no);
     }
-    if (status->gain_stat < 2 || status->gain_stat > 6) {
+    if (status->gain_stat < 2 || status->gain_stat > 10) {
         VTSS_I("Tesla/Atom12 LC-PLL Gain Stat should be between 2 and 10 for port:%d", port_no);
     }
 
@@ -12264,7 +12734,7 @@ static vtss_rc vtss_lcpll_viper_status_get_private(vtss_state_t         *vtss_st
     if (status->fsm_stat != 6) {
         VTSS_I("Viper LC-PLL FSM Status must be 6 for port:%d", port_no);
     }
-    if (status->gain_stat < 2 || status->gain_stat > 6) {
+    if (status->gain_stat < 2 || status->gain_stat > 10) {
         VTSS_I("Viper LC-PLL Gain Stat should be between 2 and 10 for port:%d", port_no);
     }
 
@@ -12290,12 +12760,11 @@ static vtss_rc vtss_phy_lcpll_status_get_private(vtss_state_t         *vtss_stat
     case VTSS_PHY_FAMILY_VIPER:
     case VTSS_PHY_FAMILY_ELISE:
         rc = vtss_lcpll_viper_status_get_private(vtss_state, port_no, status);
+        break;
 
     case VTSS_PHY_FAMILY_ATOM:
     case VTSS_PHY_FAMILY_TESLA:
         rc = vtss_lcpll_tesla_status_get_private(vtss_state, port_no, status);
-        break;
-
         break;
 
     case VTSS_PHY_FAMILY_NANO:
@@ -12388,6 +12857,14 @@ vtss_rc vtss_phy_reset(const vtss_inst_t           inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc      rc;
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+
+    BOOL          warm_start_cur_sav;
+    BOOL          oos_recov_enabled = FALSE;
+#endif
+#endif
+
 
     VTSS_D("vtss_phy_reset, Port:%d", port_no);
     VTSS_ENTER();
@@ -12397,9 +12874,29 @@ vtss_rc vtss_phy_reset(const vtss_inst_t           inst,
         /* -- Step 1: Detect PHY type and family -- */
         rc = vtss_phy_detect(vtss_state, port_no);
 
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+        /* -- If this is a TimeStamping PHY, Check to see if we are in a warmstart and OOS Recovery has been enabled -- */
+        /* -- If OOS Recovery has been enabled, We have to reconfigure the port back to normal operation -- */
+        warm_start_cur_sav = vtss_state->warm_start_cur;
+
+        oos_recov_enabled = vtss_phy_ts_is_oos_recovery_enabled_private(vtss_state, port_no);
+
+        if (oos_recov_enabled) {
+            vtss_state->warm_start_cur = FALSE;
+        }
+#endif
+#endif
+
         if (rc == VTSS_RC_OK) {
             rc = VTSS_RC_COLD(vtss_phy_reset_private(vtss_state, port_no));
         }
+
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+#if defined(TESLA_ING_TS_ERRFIX) && defined(VTSS_FEATURE_WARM_START)
+        vtss_state->warm_start_cur = warm_start_cur_sav;
+#endif
+#endif
     }
     VTSS_EXIT();
     return rc;
@@ -12694,9 +13191,9 @@ vtss_rc vtss_phy_cl37_lp_abil_get_private(vtss_state_t *vtss_state,
     vtss_phy_port_state_t *ps = &vtss_state->phy_state[port_no];
     vtss_phy_reset_conf_t *reset_conf = &ps->reset;
 
-    VTSS_D("vtss_phy_cl37_lp_abil_get_private, port_no: %u", port_no);
+    //VTSS_D("vtss_phy_cl37_lp_abil_get_private, port_no: %u", port_no);
 
-    if (reset_conf->media_if == VTSS_PHY_MEDIA_IF_SFP_PASSTHRU) {
+    if (is_media_if_passthru(reset_conf->media_if)) {
         VTSS_N("Reading link partner's ability in PASSTHRU MODE\n");
         switch (ps->setup.mode) {
         case VTSS_PHY_MODE_ANEG:
@@ -12716,28 +13213,63 @@ vtss_rc vtss_phy_cl37_lp_abil_get_private(vtss_state_t *vtss_state,
                 return VTSS_RC_OK;
             }
 
-            /* Read link status from register 26E3 */
+            /* Read link status from register 26E3 - This is Link Partner Status! */
+            /* By "ANDING" these values, this is what is happening:  */
+            /* 1. the Link Status passed in from Reg01 must be OK - Indicates MAC & MEDIA Status  */
+            /* 2. the MEDIA Link Status from the Link Partner (Remote PHY) must also be OK  */
             VTSS_RC(vtss_phy_page_ext3(vtss_state, port_no));
             VTSS_RC(PHY_RD_PAGE(vtss_state, port_no,
                                 VTSS_PHY_MEDIA_SERDES_CLAUSE_37_LP_ABILITY, &reg));
-            status->link = (reg & (1 << 15) ? 1 : 0);
-            status->fdx =  (reg & (1 << 12) ? 1 : 0);
-            switch ((reg >> 10) & 0x3) {
-            case 0:
-                status->speed = VTSS_SPEED_10M;
-                break;
-            case 1:
-                status->speed = VTSS_SPEED_100M;
-                break;
-            case 2:
-                status->speed = VTSS_SPEED_1G;
-                break;
-            case 3:
-                status->speed = VTSS_SPEED_UNDEFINED;
-                break;
+
+            if (reg & (1 << 0)) {   /* Make sure we are dealing with SGMII Extensions */
+                status->link &= (reg & (1 << 15) ? 1 : 0); /* Bug#23365 - Status passed in is MAC+Media and CL37 is Media only status */
+                status->fdx =  (reg & (1 << 12) ? 1 : 0);
+                switch ((reg >> 10) & 0x3) {
+                case 0:
+                    status->speed = VTSS_SPEED_10M;
+                    break;
+                case 1:
+                    status->speed = VTSS_SPEED_100M;
+                    break;
+                case 2:
+                    status->speed = VTSS_SPEED_1G;
+                    break;
+                case 3:
+                    status->speed = VTSS_SPEED_UNDEFINED;
+                    break;
+                }
+                VTSS_N("Autoneg PASSTHRU mode: speed:%d fdx:%d link:%d\n",
+                       status->speed, status->fdx, status->link);
+
+                /* Read link status from register 24E3 - This is Local Status! */
+                /* By "ANDING" these values, this is what is happening:  */
+                /* 1. the Link Status in Reg01 must be OK - Indicates MAC & MEDIA Status  */
+                /* 2. the MEDIA Link Status from the Link Partner (Remote PHY) must be OK  */
+                /* 3. the MEDIA Link Status from the Local PHY must be OK  */
+                VTSS_RC(vtss_phy_page_ext3(vtss_state, port_no));
+                VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_MEDIA_SERDES_PCS_STATUS, &reg));
+                status->link &= ((reg & VTSS_F_PHY_MEDIA_SERDES_PCS_STATUS_MEDIA_LINK_STATUS) ? 1 : 0);
+
+                /* Reg 24E3 Media PCS Status - 24E3.13:12=00 SerDes Protocol Transfer 1Gb. */
+                if ((reg & (VTSS_F_PHY_MEDIA_SERDES_PCS_STATUS_10MB_LINK_STATUS |
+                            VTSS_F_PHY_MEDIA_SERDES_PCS_STATUS_100BASEFX_PROTO_XFER_LINK_STATUS)) == 0) {
+                    if (status->speed != VTSS_SPEED_1G) {
+                        VTSS_I("1000M SPEED Mismatch - Reg24E3: 0x%04x; Local and LP Speed NOT consistent!  port_no: %d\n", reg, port_no);
+                    }
+                } else if (reg & VTSS_F_PHY_MEDIA_SERDES_PCS_STATUS_100BASEFX_PROTO_XFER_LINK_STATUS) { /* 24E3.13=SerDes ProtoXfer 100M */
+                    if (status->speed != VTSS_SPEED_100M) {
+                        VTSS_I("100M SPEED Mismatch - Reg24E3: 0x%04x; Local and LP Speed NOT consistent!  port_no: %d\n", reg, port_no);
+                    }
+                } else if (reg & VTSS_F_PHY_MEDIA_SERDES_PCS_STATUS_10MB_LINK_STATUS) { /* 24E3.12=SerDes Protocol Transfer 10Mb */
+                    if (status->speed != VTSS_SPEED_10M) {
+                        VTSS_I("10M SPEED Mismatch - Reg24E3: 0x%04x; Local and LP Speed NOT consistent!  port_no: %d\n", reg, port_no);
+                    }
+                } else { /* Reg 24E3 Media PCS Status, 24E3.13:12=11 - This should never happen as bits 12/13 are checked above */
+                    VTSS_I("VTSS_SPEED_UNDEFINED - Reg24E3: 0x%04x; Local and LP Speed NOT consistent!  port_no: %d\n", reg, port_no);
+                }
+            } else {
+                VTSS_I("INVALID SFP CONFIG Detected: Autoneg PASSTHRU mode Requires SGMII Extensions!  port_no: %d\n", port_no);
             }
-            VTSS_N("Autoneg PASSTHRU mode: speed:%d fdx:%d link:%d\n",
-                   status->speed, status->fdx, status->link);
             break;
 
         case VTSS_PHY_MODE_FORCED:
@@ -12750,10 +13282,11 @@ vtss_rc vtss_phy_cl37_lp_abil_get_private(vtss_state_t *vtss_state,
             /* Reg 24E3.12 = SerDes Protocol Transfer 10Mb Speed */
             /* Reg 24E3.13 = SerDes Proto Transfer 100M Speed */
             /* Reg 24E3.13:12=00 (both bits clear) SerDes Protocol Transfer 1Gb. */
+            VTSS_RC(vtss_phy_page_ext3(vtss_state, port_no));
             VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_MEDIA_SERDES_PCS_STATUS, &reg));
-            status->link = ((reg & VTSS_F_PHY_MEDIA_SERDES_PCS_STATUS_MEDIA_LINK_STATUS) ? 1 : 0);
+            status->link &= ((reg & VTSS_F_PHY_MEDIA_SERDES_PCS_STATUS_MEDIA_LINK_STATUS) ? 1 : 0);
 
-            /* Read link status from register 18E3 - Cl37 Advertisements of what we can do */
+            /* Read link status from register 24E3 - Cl37 Advertisements reflected in Reg18E3 of what we can do */
             status->fdx =  1;
 
             /* Reg 24E3 Media PCS Status - 24E3.13:12=00 SerDes Protocol Transfer 1Gb. */
@@ -12768,8 +13301,7 @@ vtss_rc vtss_phy_cl37_lp_abil_get_private(vtss_state_t *vtss_state,
                 status->speed = VTSS_SPEED_UNDEFINED;
             }
 
-            VTSS_N("Forced PASSTHRU mode: speed:%d fdx:%d link:%d\n",
-                   status->speed, status->fdx, status->link);
+            VTSS_I("PASSTHRU-MODE: FORCED: speed:%d fdx:%d link:%d\n", status->speed, status->fdx, status->link);
 
             break;
         default:
@@ -12942,13 +13474,59 @@ vtss_rc vtss_phy_sync(vtss_state_t *vtss_state, const vtss_port_no_t port_no)
     vtss_port_no_t i;
     vtss_phy_port_state_t *ps = &vtss_state->phy_state[port_no];
 
-    VTSS_I("OK - Warm start : port:%d", port_no);
+    VTSS_I("OK - STARTING SYNC PHASE of Warm start : port:%d", port_no);
     // Make sure that this port in fact has a 1G PHY
 
     if (ps->family == VTSS_PHY_FAMILY_NONE) {
         VTSS_N("port_no %u not connected to 1G PHY", port_no);
         return VTSS_RC_OK;
     }
+
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+#if defined(TESLA_ING_TS_ERRFIX)
+    {
+        vtss_phy_ts_fifo_conf_t   fifo_conf_tesla;
+        BOOL                      oos_recov_enabled = FALSE;
+        BOOL                      OOS = FALSE;
+        vtss_debug_printf_t       func_printf = (vtss_debug_printf_t)printf;
+        vtss_rc                   rc=0;
+
+        oos_recov_enabled = vtss_phy_ts_is_oos_recovery_enabled_private(vtss_state, port_no);
+
+        /* *********************************************************************************** */
+        /* The following code checks Config to see if there was an Early Exit previously       */
+        /* *********************************************************************************** */
+        if (oos_recov_enabled) {
+            // OOS Recovery uses HW Reg30.13 to determine if OOS was active during Warmstart 
+            // If it was active, vtss_phy_ts_sync needs to know 
+
+            VTSS_RC(vtss_phy_default_fifo_conf_tesla_oos_get(vtss_state, port_no, &fifo_conf_tesla));
+
+#ifdef VTSS_TS_FIFO_SYNC_MINIMIZE_OUTPUT
+            func_printf = dummy_printf;
+#else
+            func_printf = (vtss_debug_printf_t)printf;
+#endif
+            if (!vtss_state->sync_calling_private) {
+                VTSS_I("VTSS_PHY_SYNC: Calling Tesla OOS Recovery,  port %u, ", port_no);
+
+                /* turn on enable flag for "middleman" accesses throughout fifo_sync API - Done in this API */
+                vtss_state->rd_ts_fifo = TRUE;
+                if ((rc = vtss_phy_ts_tesla_tsp_fifo_sync_private(vtss_state, port_no, func_printf, &fifo_conf_tesla, &OOS)) != VTSS_RC_OK) {
+                    VTSS_E("TESLA TSP_FIFO SYNC Failed. port_no: %d, OOS = %u\n", port_no, OOS);
+                }
+
+                /* Switch over back from 8051 middle man approach - Done in above API */
+                vtss_state->rd_ts_fifo = FALSE;
+            }
+
+            if (OOS) {
+                VTSS_E("VTSS_PHY_SYNC: Tesla OOS Recovery failure in VTSS_PHY_SYNC,  port %u, OOS: %u", port_no, OOS);
+            }
+        }
+    }
+#endif  /* TESLA_ING_TS_ERRFIX        */
+#endif  /* VTSS_FEATURE_PHY_TIMESTAMP */
 
     VTSS_D("vtss_phy_sync, port_no:%d", port_no);
     vtss_state->sync_calling_private = TRUE;
@@ -12986,7 +13564,7 @@ vtss_rc vtss_phy_sync(vtss_state_t *vtss_state, const vtss_port_no_t port_no)
         VTSS_SYNC_RC(vtss_phy_clock_conf_set_private(vtss_state, port_no, i));
     }
 
-    VTSS_I("OK - Warm start done");
+    VTSS_I("OK - SYNC PHASE complete - PHY Warm start done");
     vtss_state->sync_calling_private = FALSE;
 
     return VTSS_RC_OK;
@@ -15705,6 +16283,35 @@ vtss_rc vtss_phy_lcpll_status_get(const vtss_inst_t    inst,
     return rc;
 }
 
+vtss_rc vtss_phy_macsec_csr_sd6g_rd(vtss_inst_t          inst,
+                                    const vtss_port_no_t port_no,
+                                    const u16            target,
+                                    const u32            csr_reg_addr,
+                                    u32                  *value)
+{
+    vtss_state_t *vtss_state;
+    vtss_rc      rc = VTSS_RC_OK;
+    if ((rc = vtss_inst_port_no_check(inst, &vtss_state, port_no)) == VTSS_RC_OK) {
+        VTSS_RC(vtss_phy_macsec_csr_rd_private(vtss_state, port_no, target, csr_reg_addr, value));
+    }
+
+    return (rc);
+}
+
+vtss_rc vtss_phy_macsec_csr_sd6g_wr(vtss_inst_t          inst,
+                                    const vtss_port_no_t port_no,
+                                    const u16            target,
+                                    const u32            csr_reg_addr,
+                                    u32                  value)
+{
+    vtss_state_t *vtss_state;
+    vtss_rc      rc = VTSS_RC_OK;
+    if ((rc = vtss_inst_port_no_check(inst, &vtss_state, port_no)) == VTSS_RC_OK) {
+        VTSS_RC(vtss_phy_macsec_csr_wr_private(vtss_state, port_no, target, csr_reg_addr, value));
+    }
+
+    return (rc);
+}
 
 #endif
 

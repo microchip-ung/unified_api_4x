@@ -1,28 +1,25 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
-
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 */
 
 #ifndef _VTSS_MACSEC_API_H_
@@ -344,7 +341,7 @@ typedef struct {
                                             1. On link down
                                             Check if interface 10G & macsec capable
                                             If (yes) then check if Macsec block is enabled using API 
-                                            vtss_macsec_init_get()init->enable == TRUE
+                                            vtss_macsec_init_get() init->enable == TRUE
                                             If (macsec_enabled) then call the API below, to set the BYPASS mode
                                             API: vtss_macsec_init_set()
                                             vtss_macsec_init_t init;
@@ -353,7 +350,7 @@ typedef struct {
                                             2. On link up
                                             Check if interface is macsec capable
                                             If (yes) then check if Macsec block is enabled using API 
-                                            vtss_macsec_init_get()init->enable == TRUE
+                                            vtss_macsec_init_get() init->enable == TRUE
                                             If (macsec_enabled) then call the API below, to remove the BYPASS
                                             API: vtss_macsec_init_set()
                                             vtss_macsec_init_t init;
@@ -364,7 +361,7 @@ typedef struct {
                                             vtss_macsec_init_set() has been called once with bypass param set 
                                             to MACSEC_INIT_BYPASS_NONE, because MACSEC_INIT_BYPASS_ENABLE/
                                             MACSEC_INIT_BYPASS_DISABLE requires once time macsec init to be
-                                            completed */
+                                            completed
 #endif
 } vtss_macsec_init_t;
 
@@ -2309,9 +2306,23 @@ vtss_rc vtss_macsec_dbg_frm_match_handling_ctrl_reg_dump(const vtss_inst_t      
                                                          const vtss_port_no_t          port_no,
                                                          const vtss_debug_printf_t     pr);
 
-
-
-
+/** \brief Configure MACsec Update sequence number.
+ *
+ * \param inst          [IN] VTSS-API instance.
+ * \param port          [IN] MACsec Port
+ * \param sci           [IN] SCI of the peer
+ * \param an            [IN] Association number, 0-3
+ * \param egr           [IN] Direction Egress/Ingress
+ * \param disable       [IN] Operation 1:Disable/0:Enable
+ *
+ * \return VTSS_RC_OK when successful; VTSS_RC_ERROR if parameters are invalid.
+ */
+vtss_rc vtss_macsec_dbg_update_seq_set(const vtss_inst_t        inst,
+                                       const vtss_macsec_port_t port,
+                                       const vtss_macsec_sci_t  *const sci,
+                                       u16                      an,
+                                       BOOL                     egr,
+                                       const BOOL               disable);
 
 // ***************************************************************************
 //

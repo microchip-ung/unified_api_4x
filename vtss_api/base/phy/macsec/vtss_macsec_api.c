@@ -1,27 +1,25 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
  $Id$
  $Revision$
@@ -38,10 +36,14 @@
 #include "../../ail/vtss_state.h"
 #include "../../ail/vtss_common.h"
 #include "../common/vtss_phy_common.h"
+
 #if defined (VTSS_FEATURE_PHY_TIMESTAMP)
 #include "../ts/vtss_phy_ts.h"
+#if defined(VTSS_CHIP_CU_PHY) // Only for 1G PHYs
 #include "../ts/vtss_phy_ts_util.h"
+#endif
 #endif /* VTSS_FEATURE_PHY_TIMESTAMP */
+
 #include "../phy_10g/chips/malibu/vtss_malibu_regs.h"
 #define MACSEC_INGR              0x0000
 #define MACSEC_EGR               0x8000
@@ -226,7 +228,7 @@ A
 
 #ifdef VTSS_MACSEC_FIFO_OVERFLOW_WORKAROUND
 vtss_rc vtss_macsec_reconfigure(vtss_state_t *vtss_state, const vtss_port_no_t port_no);
-#endif /* VTSS_MACSEC_FIFO_OVERFLOW_WORKAROUND*/
+#endif
 
 static vtss_rc vtss_macsec_init_set_priv(vtss_state_t *vtss_state, const vtss_port_no_t port_no,
                                          const vtss_macsec_init_t *const init);
@@ -1046,7 +1048,7 @@ static vtss_rc macsec_update_glb_validate(vtss_state_t *vtss_state, vtss_port_no
 //    }
 //    return VTSS_RC_OK;
 //}
-#endif /* VTSS_MACSEC_FIFO_OVERFLOW_WORKAROUND*/
+#endif
 
 /* ================================================================= *
  *  Private functions - Start
@@ -1461,7 +1463,7 @@ vtss_rc vtss_macsec_speed_conf_priv(vtss_state_t                      *vtss_stat
 
             rc = vtss_macsec_init_set_priv(vtss_state, port_no, &vtss_state->macsec_conf[port_no].glb.init);
 
-            if(rc != VTSS_RC_OK){
+            if (rc != VTSS_RC_OK) {
                 VTSS_E("vtss_macsec_init_set_priv port(%d) return rc(0x%04x)", port_no, rc);
                 return VTSS_RC_OK;
             }
@@ -1857,6 +1859,7 @@ static vtss_rc vtss_macsec_init_set_priv(vtss_state_t                      *vtss
         memset(&vtss_state->macsec_conf[port_no], 0, sizeof(vtss_state->macsec_conf[port_no]));
 
     }
+
     return VTSS_RC_OK;
 }
 
@@ -3447,6 +3450,25 @@ static vtss_rc vtss_macsec_rx_sa_get_priv(vtss_state_t                  *vtss_st
     vtss_macsec_internal_secy_t *secy = &vtss_state->macsec_conf[port.port_no].secy[secy_id];
     BOOL xpn = FALSE;
     u64 value;
+    BOOL phy10g = FALSE;
+
+    VTSS_RC(phy_type_get(vtss_state, port.port_no, &phy10g));
+    if (phy10g) {
+#ifdef VTSS_CHIP_10G_PHY
+        if (vtss_state->phy_10g_state[port.port_no].power) {
+            VTSS_E("Port:%u power down, cannot access registers", port.port_no);
+            return VTSS_RC_ERROR;
+        }
+#endif
+    } else {
+#ifdef VTSS_CHIP_CU_PHY
+        if (vtss_state->phy_state[port.port_no].setup.mode == VTSS_PHY_MODE_POWER_DOWN) {
+            VTSS_E("Port:%u power down, cannot access registers", port.port_no);
+            return VTSS_RC_ERROR;
+        }
+#endif
+    }
+
     VTSS_RC(sc_from_sci_get(vtss_state, port.port_no, secy, sci, &sc));
     VTSS_MACSEC_ASSERT(an >= VTSS_MACSEC_SA_PER_SC_MAX, "AN is invalid");
 
@@ -3508,7 +3530,7 @@ static vtss_rc vtss_macsec_tx_sa_counters_get_priv(vtss_state_t                 
     vtss_macsec_internal_secy_t *secy = &vtss_state->macsec_conf[port_no].secy[secy_id];
     u64 cnt;
     u32 record;
-    u32 out_pkts_encrypted = 0;
+    u64 out_pkts_encrypted = 0;
 
     memset(counters, 0, sizeof(vtss_macsec_tx_sa_counters_t));
 
@@ -4752,7 +4774,7 @@ static vtss_rc vtss_macsec_rx_sa_set_priv(vtss_state_t                  *vtss_st
         secy->rx_sc[sc]->sa[an]->status.pn_status.lowest_pn = lowest_pn; // Rev-B
         secy->rx_sc[sc]->sa[an]->in_use = 1;
         VTSS_TIME_OF_DAY(tod);
-        secy->rx_sc[sc]->sa[an]->status.created_time = tod.sec; // TimeOfDay in seconds */
+        secy->rx_sc[sc]->sa[an]->status.created_time = tod.sec; // TimeOfDay in seconds
     }
 
     if (vtss_state->warm_start_cur) {
@@ -4993,7 +5015,7 @@ vtss_rc vtss_macsec_rx_seca_set(const vtss_inst_t             inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_ENTER();
     if ((rc = vtss_macsec_port_check(inst, &vtss_state, port, 0, &secy_id)) == VTSS_RC_OK) {
@@ -5014,7 +5036,7 @@ vtss_rc vtss_macsec_rx_seca_get(const vtss_inst_t             inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_D(MPORT_SCI_AN_FMT, MPORT_SCI_AN_ARG(port, *sci, an));
     VTSS_ENTER();
@@ -5037,7 +5059,7 @@ vtss_rc vtss_macsec_rx_seca_lowest_pn_update(const vtss_inst_t            inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I(MPORT_SCI_AN_FMT", pn: %"PRIu64, MPORT_SCI_AN_ARG(port, *sci, an),
            lowest_pn.xpn);
@@ -6454,7 +6476,7 @@ static vtss_rc vtss_macsec_hmac_counters_get_priv(vtss_state_t                  
            (port_no + 1),                          \
            counters->if_tx_octets,               \
            counters->if_tx_StatsPkts,            \
-           counters->if_tx_pause_pkts,                \
+           counters->if_tx_pause_pkts,           \
            counters->if_tx_ucast_pkts,           \
            counters->if_tx_multicast_pkts,       \
            counters->if_tx_broadcast_pkts,       \
@@ -7231,6 +7253,10 @@ vtss_rc vtss_macsec_init_set(const vtss_inst_t                inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
+#if defined(VTSS_CHIP_10G_PHY)
+    vtss_phy_10g_power_t power_mode;
+#endif
+   u32 reg_val;
 #ifdef VTSS_CHIP_CU_PHY
     vtss_phy_conf_t power;
     vtss_phy_type_t phy_1g_id;
@@ -7244,6 +7270,18 @@ vtss_rc vtss_macsec_init_set(const vtss_inst_t                inst,
         }
     }
 #endif /* VTSS_CHIP_CU_PHY */
+
+#if defined(VTSS_CHIP_10G_PHY)
+    if (vtss_phy_10G_is_valid(inst, port_no)) {
+        if (vtss_phy_10g_power_get(inst, port_no, &power_mode) == VTSS_RC_OK) {
+            if (power_mode == VTSS_PHY_10G_POWER_DISABLE) {
+                VTSS_E("Phy %u is powered down, i.e. the MacSec block is not accessible", port_no);
+                return VTSS_RC_ERROR;
+            }
+        }
+    }
+#endif /* VTSS_CHIP_10G_PHY */
+
     VTSS_D("port_no: %u", port_no);
     VTSS_ENTER();
 
@@ -7251,8 +7289,7 @@ vtss_rc vtss_macsec_init_set(const vtss_inst_t                inst,
 
 #if defined(VTSS_FEATURE_PHY_TIMESTAMP)
 #if defined(TESLA_ING_TS_ERRFIX) || defined(VIPER_B_FIFO_RESET)
-
-        if((vtss_phy_ts_algo_execute_check(vtss_state, port_no)) ==  TRUE){
+        if ((vtss_phy_ts_algo_execute_check(vtss_state, port_no)) ==  TRUE) {
             VTSS_E("1588 is configured, MACsec configuration should be applied before 1588 configuration port_no %u", port_no);
             VTSS_EXIT();
             return VTSS_RC_ERROR;
@@ -7262,20 +7299,37 @@ vtss_rc vtss_macsec_init_set(const vtss_inst_t                inst,
         if (!is_macsec_capable(vtss_state, port_no)) {
             VTSS_E("Port/Phy :%u is not MacSec capable", port_no);
             rc = dbg_counter_incr(vtss_state, port_no, VTSS_RC_ERR_MACSEC_PHY_NOT_MACSEC_CAPABLE);
+            VTSS_EXIT();
+            return VTSS_RC_ERROR;
         } else if (init->bypass == MACSEC_INIT_BYPASS_ENABLE ||
                    init->bypass == MACSEC_INIT_BYPASS_DISABLE) {
             VTSS_D("Port:%u Macsec bypass %s", port_no, (init->bypass == MACSEC_INIT_BYPASS_ENABLE) ? "Enabled" : "Disabled");
             vtss_state->macsec_conf[port_no].glb.init.bypass = init->bypass;
-            (init->bypass == MACSEC_INIT_BYPASS_ENABLE) ? (vtss_state->macsec_conf[port_no].glb.init.enable = 0) : (vtss_state->macsec_conf[port_no].glb.init.enable = 1);
-            CSR_COLD_WR(port_no, VTSS_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG,
-                        init->bypass == MACSEC_INIT_BYPASS_ENABLE ? (VTSS_F_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_BYPASS_ENA |
-                                                                     VTSS_F_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_CLK_ENA) : (VTSS_F_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_ENA | VTSS_F_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_CLK_ENA) );
+            CSR_RD(port_no, VTSS_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG, &reg_val);
+            if (init->bypass == MACSEC_INIT_BYPASS_ENABLE) {
+                reg_val &= ~VTSS_F_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_ENA;
+                reg_val |= VTSS_F_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_BYPASS_ENA;
+                CSR_COLD_WR(port_no, VTSS_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG, reg_val);
+            } else {
+                reg_val |= VTSS_F_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_ENA;
+                reg_val &= ~VTSS_F_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_BYPASS_ENA;
+                CSR_COLD_WR(port_no, VTSS_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG, reg_val);
+            }
 
             /* Egress */
-            CSR_COLD_WR(port_no, VTSS_MACSEC_EGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG,
-                        init->bypass == MACSEC_INIT_BYPASS_ENABLE ? (VTSS_F_MACSEC_EGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_CLK_ENA |
-                                                                     VTSS_F_MACSEC_EGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_BYPASS_ENA ) : (VTSS_F_MACSEC_EGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_CLK_ENA |
-                                                                             VTSS_F_MACSEC_EGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_ENA));
+            CSR_RD(port_no, VTSS_MACSEC_EGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG, &reg_val);
+            if (init->bypass == MACSEC_INIT_BYPASS_ENABLE) {
+                reg_val &= ~VTSS_F_MACSEC_EGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_ENA;
+                reg_val |= VTSS_F_MACSEC_EGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_BYPASS_ENA;
+                CSR_COLD_WR(port_no, VTSS_MACSEC_EGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG, reg_val);
+                vtss_state->macsec_conf[port_no].glb.init.enable = 0;
+            } else {
+                reg_val |= VTSS_F_MACSEC_EGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_ENA;
+                reg_val &= ~VTSS_F_MACSEC_EGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_BYPASS_ENA;
+                CSR_COLD_WR(port_no, VTSS_MACSEC_EGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG, reg_val);
+                vtss_state->macsec_conf[port_no].glb.init.enable = 1;
+            }
+
             VTSS_EXIT();
             return VTSS_RC_OK;
         } else {
@@ -7331,7 +7385,9 @@ vtss_rc vtss_macsec_init_set(const vtss_inst_t                inst,
         VTSS_E("Could not set speed on port:%u", port_no);
     }
     if (init->enable) {
-        VTSS_RC(phy_10g_mac_conf(vtss_state, port_no, 1, 1));
+        if((rc = MACSEC_RC_COLD(phy_10g_mac_conf(vtss_state, port_no, 1, 1))) != VTSS_RC_OK){
+            VTSS_E("Could not set mac conf on port:%u", port_no);
+        }
     }
 
     VTSS_EXIT();
@@ -7382,7 +7438,7 @@ vtss_rc vtss_macsec_secy_conf_add(const vtss_inst_t                 inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id, i;
+    u32 secy_id = 0, i = 0;
     vtss_macsec_internal_secy_t *secy;
 
     VTSS_I("Port: %u/%u/%u. TxMAC:"MACADDRESS_FMT, MACSEC_PORT_ARG(&port), MACADDRESS_ARG(conf->mac_addr));
@@ -7450,7 +7506,7 @@ vtss_rc vtss_macsec_secy_conf_update(const vtss_inst_t                 inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id, i, sc, sa;
+    u32 secy_id = 0, i = 0, sc = 0, sa = 0;
     u32 max_sc_rx;
     vtss_macsec_internal_secy_t *secy;
 
@@ -7545,7 +7601,7 @@ vtss_rc vtss_macsec_secy_conf_del(const vtss_inst_t                 inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I("port_no: %u/%u/%u", port.port_no, port.port_id, port.service_id);
     VTSS_ENTER();
@@ -7562,7 +7618,7 @@ vtss_rc vtss_macsec_secy_conf_get(const vtss_inst_t         inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_D("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
     VTSS_ENTER();
@@ -7580,7 +7636,7 @@ vtss_rc vtss_macsec_secy_controlled_set(const vtss_inst_t         inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
     VTSS_I("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
     VTSS_ENTER();
     if ((rc = vtss_macsec_port_check(inst, &vtss_state, port, 0, &secy_id)) == VTSS_RC_OK) {
@@ -7596,7 +7652,7 @@ vtss_rc vtss_macsec_secy_controlled_get(const vtss_inst_t         inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_D("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
     VTSS_ENTER();
@@ -7613,7 +7669,7 @@ vtss_rc vtss_macsec_rx_sc_add(const vtss_inst_t           inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I(MPORT_SCI_FMT, MPORT_SCI_ARG(port, *sci));
     VTSS_ENTER();
@@ -7633,7 +7689,7 @@ vtss_rc vtss_macsec_rx_sc_update(const vtss_inst_t              inst,
     vtss_state_t *vtss_state;
     vtss_macsec_internal_secy_t *secy;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id, sc;
+    u32 secy_id = 0, sc = 0;
 
     VTSS_I(MPORT_SCI_FMT", conf:"MACSEC_RX_SC_CONF_FMT,
            MPORT_SCI_ARG(port, *sci), MACSEC_RX_SC_CONF_ARG(conf));
@@ -7667,7 +7723,7 @@ vtss_rc vtss_macsec_rx_sc_del(const vtss_inst_t           inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I(MPORT_SCI_FMT, MPORT_SCI_ARG(port, *sci));
     VTSS_ENTER();
@@ -7684,7 +7740,7 @@ vtss_rc vtss_macsec_secy_port_status_get(const vtss_inst_t                 inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
     BOOL fdx = 1;
 #ifdef VTSS_CHIP_CU_PHY
     vtss_port_status_t phy_status;
@@ -7859,7 +7915,7 @@ vtss_rc vtss_macsec_rx_sc_get_next(const vtss_inst_t              inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
 
@@ -7879,7 +7935,7 @@ vtss_rc vtss_macsec_rx_sc_status_get(const vtss_inst_t               inst,
     vtss_macsec_internal_secy_t *secy;
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id, an, sc;
+    u32 secy_id = 0, an = 0, sc = 0;
 
     VTSS_D(MPORT_FMT, MPORT_ARG(port));
     VTSS_ENTER();
@@ -7911,7 +7967,7 @@ vtss_rc vtss_macsec_tx_sc_set(const vtss_inst_t           inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I(MPORT_FMT, MPORT_ARG(port));
     VTSS_ENTER();
@@ -7929,7 +7985,7 @@ vtss_rc vtss_macsec_tx_sc_update(const vtss_inst_t              inst,
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
     vtss_macsec_internal_secy_t *secy;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I(MPORT_FMT" conf:"MACSEC_TX_SC_CONF_FMT, MPORT_ARG(port),
            MACSEC_TX_SC_CONF_ARG(*conf));
@@ -7958,7 +8014,7 @@ vtss_rc vtss_macsec_tx_sc_del(const vtss_inst_t           inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I(MPORT_FMT, MPORT_ARG(port));
     VTSS_ENTER();
@@ -7976,7 +8032,7 @@ vtss_rc vtss_macsec_tx_sc_status_get(const vtss_inst_t           inst,
     vtss_macsec_internal_secy_t *secy;
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id, an;
+    u32 secy_id = 0, an = 0;
 
     VTSS_D(MPORT_FMT, MPORT_ARG(port));
     VTSS_ENTER();
@@ -8015,7 +8071,7 @@ vtss_rc vtss_macsec_tx_sc_get_conf(const vtss_inst_t              inst,
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
     vtss_macsec_internal_secy_t *secy;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
     VTSS_ENTER();
@@ -8044,7 +8100,7 @@ vtss_rc vtss_macsec_rx_sc_get_conf(const vtss_inst_t              inst,
     vtss_state_t *vtss_state;
     vtss_macsec_internal_secy_t *secy;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id, sc;
+    u32 secy_id = 0, sc = 0;
 
     VTSS_I("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
     VTSS_ENTER();
@@ -8069,7 +8125,7 @@ vtss_rc vtss_macsec_rx_sa_set(const vtss_inst_t             inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
     vtss_macsec_pkt_num_t pkt_num;
 
     pkt_num.pn = lowest_pn;
@@ -8093,7 +8149,7 @@ vtss_rc vtss_macsec_rx_sa_get(const vtss_inst_t             inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
     vtss_macsec_pkt_num_t pkt_num;
     vtss_macsec_ssci_t temp;
 
@@ -8120,7 +8176,7 @@ vtss_rc vtss_macsec_rx_sa_activate(const vtss_inst_t             inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I(MPORT_SCI_AN_FMT, MPORT_SCI_AN_ARG(port, *sci, an));
     VTSS_ENTER();
@@ -8138,7 +8194,7 @@ vtss_rc vtss_macsec_rx_sa_disable(const vtss_inst_t         inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I(MPORT_SCI_AN_FMT, MPORT_SCI_AN_ARG(port, *sci, an));
     VTSS_ENTER();
@@ -8156,7 +8212,7 @@ vtss_rc vtss_macsec_rx_sa_del(const vtss_inst_t         inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I(MPORT_SCI_AN_FMT, MPORT_SCI_AN_ARG(port, *sci, an));
     VTSS_ENTER();
@@ -8175,7 +8231,7 @@ vtss_rc vtss_macsec_rx_sa_lowest_pn_update(const vtss_inst_t            inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
     vtss_macsec_pkt_num_t pkt_num;
 
     VTSS_I(MPORT_SCI_AN_FMT", an: %u", MPORT_SCI_AN_ARG(port, *sci, an),
@@ -8198,7 +8254,7 @@ vtss_rc vtss_macsec_rx_sa_status_get(const vtss_inst_t           inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_D(MPORT_SCI_AN_FMT, MPORT_SCI_AN_ARG(port, *sci, an));
     VTSS_ENTER();
@@ -8222,7 +8278,7 @@ vtss_rc vtss_macsec_tx_sa_set(const vtss_inst_t              inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
     vtss_macsec_pkt_num_t pkt_num;
 
     VTSS_I(MPORT_AN_FMT" pn:%u, confidentiality:%d cipher:%u", MPORT_AN_ARG(port, an),
@@ -8248,7 +8304,7 @@ vtss_rc vtss_macsec_tx_sa_get(const vtss_inst_t              inst,
     vtss_macsec_internal_secy_t *secy;
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_D(MPORT_AN_FMT, MPORT_AN_ARG(port, an));
     VTSS_MACSEC_ASSERT(an >= VTSS_MACSEC_SA_PER_SC_MAX, "AN is invalid");
@@ -8286,7 +8342,7 @@ vtss_rc vtss_macsec_tx_sa_activate(const vtss_inst_t         inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I(MPORT_AN_FMT, MPORT_AN_ARG(port, an));
     VTSS_ENTER();
@@ -8303,7 +8359,7 @@ vtss_rc vtss_macsec_tx_sa_disable(const vtss_inst_t         inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I(MPORT_AN_FMT, MPORT_AN_ARG(port, an));
     VTSS_ENTER();
@@ -8322,7 +8378,7 @@ vtss_rc vtss_macsec_tx_sa_del(const vtss_inst_t         inst,
 
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I(MPORT_AN_FMT, MPORT_AN_ARG(port, an));
     VTSS_ENTER();
@@ -8341,7 +8397,7 @@ vtss_rc vtss_macsec_tx_sa_status_get(const vtss_inst_t           inst,
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
     vtss_macsec_internal_secy_t *secy;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_D(MPORT_AN_FMT, MPORT_AN_ARG(port, an));
     VTSS_ENTER();
@@ -8371,7 +8427,7 @@ vtss_rc vtss_macsec_tx_seca_set(const vtss_inst_t              inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I(MPORT_AN_FMT" pn:%"PRIu64", confidentiality:%d cipher:%u, ssci:%c%c%c%c", MPORT_AN_ARG(port, an),
            next_pn.xpn, confidentiality, (sak->len == 16 ? 128 : 256),
@@ -8396,7 +8452,7 @@ vtss_rc vtss_macsec_tx_seca_get(const vtss_inst_t              inst,
     vtss_macsec_internal_secy_t *secy;
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_D(MPORT_AN_FMT, MPORT_AN_ARG(port, an));
     VTSS_MACSEC_ASSERT(an >= VTSS_MACSEC_SA_PER_SC_MAX, "AN is invalid");
@@ -8435,7 +8491,7 @@ vtss_rc vtss_macsec_controlled_counters_get(const vtss_inst_t                  i
 {
     vtss_state_t *vtss_state;
     vtss_rc rc;
-    u32 secy_id;
+    u32 secy_id = 0;
     VTSS_D("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
 
     VTSS_ENTER();
@@ -8514,7 +8570,7 @@ vtss_rc vtss_macsec_secy_counters_get(const vtss_inst_t             inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_D("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
     VTSS_ENTER();
@@ -8562,7 +8618,7 @@ vtss_rc vtss_macsec_rx_sc_counters_get(const vtss_inst_t               inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_D("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
     VTSS_ENTER();
@@ -8580,7 +8636,7 @@ vtss_rc vtss_macsec_tx_sc_counters_get(const vtss_inst_t               inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_D("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
     VTSS_ENTER();
@@ -8599,7 +8655,7 @@ vtss_rc vtss_macsec_tx_sa_counters_get(const vtss_inst_t               inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_D("Port: %u/%u/%u an:%u", MACSEC_PORT_ARG(&port), an);
     VTSS_ENTER();
@@ -8618,7 +8674,7 @@ vtss_rc vtss_macsec_rx_sa_counters_get(const vtss_inst_t            inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_D(MPORT_SCI_AN_FMT, MPORT_SCI_AN_ARG(port, *sci, an));
     VTSS_ENTER();
@@ -8752,7 +8808,7 @@ vtss_rc vtss_macsec_pattern_set(const vtss_inst_t                  inst,
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
     vtss_macsec_internal_secy_t *secy;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     {
         char buf[256];
@@ -8788,7 +8844,7 @@ vtss_rc vtss_macsec_pattern_del(const vtss_inst_t                  inst,
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
     vtss_macsec_internal_secy_t *secy;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
 
@@ -8819,7 +8875,7 @@ vtss_rc vtss_macsec_pattern_get(const vtss_inst_t                  inst,
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
     vtss_macsec_internal_secy_t *secy;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_D("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
     VTSS_ENTER();
@@ -8875,7 +8931,7 @@ vtss_rc vtss_macsec_bypass_tag_set(const vtss_inst_t              inst,
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
     vtss_macsec_internal_secy_t *secy;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_I("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
     VTSS_ENTER();
@@ -8894,7 +8950,7 @@ vtss_rc vtss_macsec_bypass_tag_get(const vtss_inst_t             inst,
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
     vtss_macsec_internal_secy_t *secy;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_D("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
     VTSS_ENTER();
@@ -9179,8 +9235,28 @@ vtss_rc vtss_macsec_sync(vtss_state_t *vtss_state, const vtss_port_no_t port_no)
     vtss_macsec_internal_secy_t *secy;
     u32 secy_id, an;
     vtss_macsec_pkt_num_t pkt_num;
+    BOOL phy10g = FALSE;
 
     pkt_num.xpn = 0;
+    VTSS_RC(phy_type_get(vtss_state, port_no, &phy10g));
+    if (phy10g) {
+#ifdef VTSS_CHIP_10G_PHY
+        if (vtss_state->phy_10g_state[port_no].power ||
+            !vtss_state->macsec_conf[port_no].glb.init.enable) {
+            VTSS_I("Skipping macsec sync process in warmstart on port_no:%d id:VSC%d (Port disabled/MACsec disabled)", port_no, phy_id);
+            return VTSS_RC_OK;
+        }
+#endif
+    } else {
+#ifdef VTSS_CHIP_CU_PHY
+        if ((vtss_state->phy_state[port_no].setup.mode == VTSS_PHY_MODE_POWER_DOWN) ||
+            (!vtss_state->macsec_conf[port_no].glb.init.enable)) {
+            VTSS_I("Skipping macsec sync process in warmstart on port_no:%d id:VSC%d (Port disabled/MACsec disabled)", port_no, phy_id);
+            return VTSS_RC_OK;
+        }
+#endif
+    }
+
     if (vtss_macsec_verify_port(vtss_state, port_no, &phy_id) != VTSS_RC_OK) {
         VTSS_I("Skipping macsec warmstart on port_no:%d id:VSC%d (Not macsec capable or macsec disabled)", port_no, phy_id);
         return VTSS_RC_OK;
@@ -9306,6 +9382,7 @@ vtss_rc vtss_macsec_reconfigure(vtss_state_t *vtss_state, const vtss_port_no_t p
             search_sci = &found_sci;
         }
         if (secy->tx_sc.in_use) {
+            secy->tx_sc.status.encoding_sa = 0;
             for (an = 0; an < VTSS_MACSEC_SA_PER_SC_MAX; an++) {
                 (void)vtss_macsec_tx_sa_set_priv(vtss_state, secy_id, found_macsec_port, an, pkt_num, 0, NULL, NULL);
                 (void)vtss_macsec_tx_sa_activate_priv(vtss_state, secy_id, found_macsec_port, an);
@@ -9317,7 +9394,7 @@ vtss_rc vtss_macsec_reconfigure(vtss_state_t *vtss_state, const vtss_port_no_t p
 
     return VTSS_RC_OK;
 }
-#endif /* VTSS_MACSEC_FIFO_OVERFLOW_WORKAROUND */
+#endif
 
 vtss_rc vtss_macsec_inst_count_get(const vtss_inst_t    inst,
                                    const vtss_port_no_t port_no,
@@ -9420,7 +9497,7 @@ vtss_rc vtss_macsec_controlled_counters_clear (const vtss_inst_t  inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc;
-    u32 secy_idx;
+    u32 secy_idx = 0;
 
     VTSS_D("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
     VTSS_ENTER();
@@ -9438,7 +9515,7 @@ vtss_rc vtss_macsec_rxsa_counters_clear(const vtss_inst_t  inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc;
-    u32 secy_idx;
+    u32 secy_idx = 0;
 
     VTSS_D(MPORT_SCI_AN_FMT, MPORT_SCI_AN_ARG(port, *sci, an));
     VTSS_ENTER();
@@ -9455,7 +9532,7 @@ vtss_rc vtss_macsec_rxsc_counters_clear(const vtss_inst_t  inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc;
-    u32 secy_idx;
+    u32 secy_idx = 0;
 
     VTSS_D("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
     VTSS_ENTER();
@@ -9472,7 +9549,7 @@ vtss_rc vtss_macsec_txsa_counters_clear(const vtss_inst_t  inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc;
-    u32 secy_idx;
+    u32 secy_idx = 0;
 
     VTSS_D("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
     VTSS_ENTER();
@@ -9488,7 +9565,7 @@ vtss_rc vtss_macsec_txsc_counters_clear (const vtss_inst_t  inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc;
-    u32 secy_idx;
+    u32 secy_idx = 0;
 
     VTSS_D("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
     VTSS_ENTER();
@@ -9504,7 +9581,7 @@ vtss_rc vtss_macsec_secy_counters_clear (const vtss_inst_t  inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc;
-    u32 secy_idx;
+    u32 secy_idx = 0;
 
     VTSS_D("Port: %u/%u/%u", MACSEC_PORT_ARG(&port));
     VTSS_ENTER();
@@ -9552,7 +9629,7 @@ vtss_rc vtss_macsec_rxsa_an_status_get (const vtss_inst_t        inst,
 {
     vtss_state_t *vtss_state;
     vtss_rc rc = VTSS_RC_ERROR;
-    u32 secy_id;
+    u32 secy_id = 0;
 
     VTSS_MACSEC_ASSERT(an >= VTSS_MACSEC_SA_PER_SC_MAX, "AN is invalid");
 
@@ -10508,6 +10585,45 @@ static vtss_rc vtss_macsec_dbg_reg_dump_priv(vtss_state_t *vtss_state,
     return VTSS_RC_OK;
 }
 
+static vtss_rc vtss_macsec_dbg_update_seq_set_priv(vtss_state_t             *vtss_state,
+                                                   const u32                secy_id,
+                                                   const vtss_macsec_port_t port,
+                                                   const vtss_macsec_sci_t  *const sci,
+                                                   u16                      an,
+                                                   BOOL                     egr,
+                                                   BOOL                     disable)
+{
+    vtss_macsec_internal_secy_t *secy = &vtss_state->macsec_conf[port.port_no].secy[secy_id];
+    u32 seq_update;
+    u32 record;
+    u32 sc;
+
+    VTSS_D("Port:%u, Egr:%d, AN:%d, Disable:%d", port.port_no, egr, an, disable);
+    VTSS_RC(sc_from_sci_get(vtss_state, port.port_no, secy, sci, &sc));
+
+    if (egr) {
+        record = secy->tx_sc.sa[an]->record;
+        CSR_RD(port.port_no, VTSS_MACSEC_EGR_XFORM_RECORD_REGS_XFORM_REC_DATA0(record), &seq_update);
+        if (disable) {
+            seq_update = seq_update & ~(1 << 13);
+        } else {
+            seq_update |= (1 << 13);
+        }
+        CSR_WARM_WR(port.port_no, VTSS_MACSEC_EGR_XFORM_RECORD_REGS_XFORM_REC_DATA0(record), seq_update);
+    } else {
+        record = secy->rx_sc[sc]->sa[an]->record;
+        CSR_RD(port.port_no, VTSS_MACSEC_INGR_XFORM_RECORD_REGS_XFORM_REC_DATA0(record), &seq_update);
+        if (disable) {
+            seq_update = seq_update & ~(1 << 13);
+        } else {
+            seq_update |= (1 << 13);
+        }
+        CSR_WARM_WR(port.port_no, VTSS_MACSEC_INGR_XFORM_RECORD_REGS_XFORM_REC_DATA0(record), seq_update);
+    }
+
+    return VTSS_RC_OK;
+}
+
 vtss_rc vtss_macsec_dbg_reg_dump(const vtss_inst_t             inst,
                                  const vtss_port_no_t          port_no,
                                  const vtss_debug_printf_t pr)
@@ -10718,6 +10834,7 @@ vtss_rc vtss_macsec_dbg_reconfig(const vtss_inst_t    inst,
     return rc;
 }
 #endif /* VTSS_MACSEC_FIFO_OVERFLOW_WORKAROUND */
+#if defined(VTSS_CHIP_CU_PHY)
 vtss_rc vtss_macsec_drop_all_traffic_priv(vtss_state_t *vtss_state,
                                           const vtss_port_no_t port_no)
 {
@@ -10735,10 +10852,10 @@ vtss_rc vtss_macsec_drop_all_traffic_priv(vtss_state_t *vtss_state,
     }
 
     CSR_COLD_WR(port_no, VTSS_MACSEC_INGR_FRAME_MATCHING_HANDLING_CTRL_SAM_NM_FLOW_NCP, 0x81818181);
-    CSR_COLD_WR(port_no,VTSS_MACSEC_INGR_FRAME_MATCHING_HANDLING_CTRL_SAM_NM_FLOW_CP , 0x81818181);
+    CSR_COLD_WR(port_no, VTSS_MACSEC_INGR_FRAME_MATCHING_HANDLING_CTRL_SAM_NM_FLOW_CP , 0x81818181);
 
-    CSR_COLD_WR(port_no,VTSS_MACSEC_EGR_FRAME_MATCHING_HANDLING_CTRL_SAM_NM_FLOW_NCP , 0x81818181);
-    CSR_COLD_WR(port_no,VTSS_MACSEC_EGR_FRAME_MATCHING_HANDLING_CTRL_SAM_NM_FLOW_CP , 0x81818181);
+    CSR_COLD_WR(port_no, VTSS_MACSEC_EGR_FRAME_MATCHING_HANDLING_CTRL_SAM_NM_FLOW_NCP , 0x81818181);
+    CSR_COLD_WR(port_no, VTSS_MACSEC_EGR_FRAME_MATCHING_HANDLING_CTRL_SAM_NM_FLOW_CP , 0x81818181);
 
     CSR_COLD_WR(port_no, VTSS_MACSEC_EGR_SA_MATCH_CTL_PARAMS_SAM_ENTRY_CLEAR1, 0xFFFFFFFF);
 
@@ -10746,7 +10863,26 @@ vtss_rc vtss_macsec_drop_all_traffic_priv(vtss_state_t *vtss_state,
 
     return VTSS_RC_OK;
 }
+#endif //#if defined(VTSS_CHIP_CU_PHY)
+vtss_rc vtss_macsec_dbg_update_seq_set(const vtss_inst_t        inst,
+                                       const vtss_macsec_port_t port,
+                                       const vtss_macsec_sci_t  *const sci,
+                                       u16                      an,
+                                       BOOL                     egr,
+                                       const BOOL               disable)
+{
+    vtss_state_t *vtss_state;
+    vtss_rc rc = VTSS_RC_ERROR;
+    u32 secy_id;
 
+    VTSS_I(MPORT_SCI_AN_FMT, MPORT_SCI_AN_ARG(port, *sci, an));
+    VTSS_ENTER();
+    if ((rc = vtss_macsec_port_check(inst, &vtss_state, port, 0, &secy_id)) == VTSS_RC_OK) {
+        rc = vtss_macsec_dbg_update_seq_set_priv(vtss_state, secy_id, port, sci, an, egr, disable);
+    }
+    VTSS_EXIT();
+    return rc;
+}
 
 #endif /*VTSS_FEATURE_MACSEC */
 

@@ -1,27 +1,25 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
 */
 
@@ -36,6 +34,8 @@
 #endif
 
 #if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+
+#if defined(VTSS_CHIP_CU_PHY)
 #include "../../ail/vtss_state.h"
 #include "../common/vtss_phy_common.h"
 #include "vtss_phy_ts_api.h"
@@ -53,6 +53,7 @@
 #endif /* VTSS_FEATURE_MACSEC */
 
 #if defined(VTSS_CHIP_CU_PHY)
+#include "../phy_1g/vtss_phy.h"
 #include "../phy_1g/vtss_phy_init_scripts.h"
 #endif
 
@@ -84,14 +85,58 @@
 //         rtn-delta = Nsecs between two packets SOF
 //
 
+#ifdef ENABLE_1588_DEBUG_REG_READ
+extern vtss_rc vtss_phy_1588_debug_reg_read_private(vtss_state_t *vtss_state, vtss_port_no_t port_no, u32 blk_id);
+#endif
+
+
 #ifdef TESLA_ING_TS_ERRFIX
+
+/* *****************  Start of Lab Testing ONLY Definitions *********************************************** */
+/* Simulation of WARMSTART */
+/* This flag will simulate OOS Recovery being active and then the Processor restarts in the middle of OOS */
+/* This means this is an Early Exit, but there is no recovery mechanism to reconfig the PHY */
+//#define TESLA_FIFO_SYNC_OOS_WS_ERROR_TESTING
+
+/* Simulation of EARLY EXIT OF OOS Recovery: */
+/* Similar to CSR Access Error, MDIO Error, or other Error */
+/* Lab Testing purposes ONLY, Forces Tesla OOS Early Exit Error every TESLA_FIFO_SYNC_OOS_EARLY_EXIT_COUNT iterations */
+//#define TESLA_FIFO_SYNC_OOS_EARLY_EXIT_ERROR_TESTING
+
+/* Having TESLA_FIFO_SYNC_OOS_WS_ERROR_TESTING Flag set will NOT exercise the OOS Reconfig of the PHY to return */
+/* the PHY config to an Operational State so traffic can pass.  This would happen in the restart part of WARMSTART */
+/* The TESLA_FIFO_SYNC_OOS_WS_ERROR_TESTING flag simulates OOS Recovery being active and then the Processor restarts in the middle of OOS */
+#ifdef  TESLA_FIFO_SYNC_OOS_WS_ERROR_TESTING
+/* Forces Tesla OOS Early Exit Error every TESLA_FIFO_SYNC_OOS_EARLY_EXIT_COUNT iterations */
+#define TESLA_FIFO_SYNC_OOS_EARLY_EXIT_ERROR_TESTING
+#endif
+
+/* Lab Testing purposes ONLY, Forces Tesla OOS Early Exit Error every TESLA_FIFO_SYNC_OOS_EARLY_EXIT_COUNT iterations */
+/* Having this Flag set will exercise the OOS Reconfig of the PHY to return it to Operational State so traffic can pass */
+#ifdef TESLA_FIFO_SYNC_OOS_EARLY_EXIT_ERROR_TESTING
+u32    tesla_fifo_sync_counter = 0;
+#ifndef TESLA_FIFO_SYNC_OOS_EARLY_EXIT_COUNT
+#define TESLA_FIFO_SYNC_OOS_EARLY_EXIT_COUNT  3   /* Forces Tesla OOS Early Exit Error every TESLA_FIFO_SYNC_OOS_EARLY_EXIT_COUNT iterations */
+#endif
+#endif
+
+/* *****************  END of Lab Testing ONLY Definitions *********************************************** */
 
 static u32     oos_counter[VTSS_PORTS];
 
 static vtss_rc vtss_phy_ts_tesla_tsp_fifo_epg_done(const vtss_port_no_t  port_no, int pkt_count, BOOL ingress);
 static vtss_rc vtss_phy_ts_tesla_8051_timer_start(vtss_state_t *vtss_state, vtss_port_no_t port_no,
-                                                  u16 channel, BOOL ingress_fifo, u16 pkt_cnt,
-                                                  BOOL match);
+                                                  u16 channel, BOOL ingress_fifo, u16 pkt_cnt, BOOL match);
+
+vtss_rc vtss_phy_default_fifo_conf_tesla_oos_get(vtss_state_t *vtss_state, vtss_port_no_t port_no, vtss_phy_ts_fifo_conf_t *fifo_conf_tesla)
+{
+    memset(fifo_conf_tesla, 0, sizeof(vtss_phy_ts_fifo_conf_t));
+    fifo_conf_tesla->detect_only = FALSE;
+    fifo_conf_tesla->eng_recov = VTSS_PHY_TS_PTP_ENGINE_ID_0;
+    fifo_conf_tesla->eng_minE = VTSS_PHY_TS_OAM_ENGINE_ID_2B;
+    return(VTSS_RC_OK);
+}
+
 #undef CALC_PACKET_TO_PACKET_DELTA
 #ifdef CALC_PACKET_TO_PACKET_DELTA
 
@@ -127,6 +172,291 @@ static u32  vtss_phy_ts_tesla_calc_pkt_to_pkt_delta_epg(vtss_state_t *vtss_state
     return (rtn_delta);
 }
 #endif
+
+static vtss_rc vtss_phy_ts_tesla_serdes_test_mode_get(vtss_state_t  *vtss_state, vtss_port_no_t   port_no, BOOL *is_mac_tst_ena, BOOL *is_media_tst_ena)
+{
+    vtss_rc            rc = VTSS_RC_OK;
+    vtss_miim_write_t  miim_write_func = vtss_state->init_conf.miim_write;
+    vtss_miim_read_t   miim_read_func = vtss_state->init_conf.miim_read;
+    u16                reg17 = 0;
+    u16                reg18 = 0;
+
+    miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_TR);
+
+    // Check MAC i/f TEST MODE Enabled - Trigger TR Read Request
+    miim_write_func(vtss_state, port_no, 0x10, 0xac82);
+    miim_read_func(vtss_state, port_no, 0x12, &reg18);
+    *is_mac_tst_ena = ((reg18 & 0x0010) == 0x0010) ? 1:0;
+
+    // Check Media i/f TEST MODE Enabled - Trigger TR Read Request
+    miim_write_func(vtss_state, port_no, 0x10, 0xbe80);
+    miim_read_func(vtss_state, port_no, 0x11, &reg17);
+    *is_media_tst_ena = ((reg17 & 0x0040) == 0x0040) ? 1:0;
+
+    VTSS_I("Checking SerDes Test Mode for port_no: %d,  is_mac_tst_ena?: 0x%x,  is_media_tst_ena?: 0x%x\n", port_no, *is_mac_tst_ena, *is_media_tst_ena);
+   miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_STANDARD);
+
+    return(rc);
+}
+
+static vtss_rc vtss_phy_ts_tesla_serdes_test_mode_set(vtss_state_t  *vtss_state, vtss_port_no_t   port_no, BOOL is_mac_if, BOOL enable)
+{
+    vtss_rc            rc = VTSS_RC_OK;
+    vtss_miim_write_t  miim_write_func = vtss_state->init_conf.miim_write;
+
+    VTSS_I("Configure SerDes Test Mode for port_no: %d,  Is_Mac?: 0x%x,  enable?: 0x%x\n", port_no, is_mac_if, enable);
+    miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_TR);
+
+    if (is_mac_if) {    // MAC
+        if (enable) {      // Enable
+            miim_write_func(vtss_state, port_no, 0x12, 0x001f);
+            miim_write_func(vtss_state, port_no, 0x11, 0x83e0);
+            miim_write_func(vtss_state, port_no, 0x10, 0x8c82);
+        } else {           // Disable
+            miim_write_func(vtss_state, port_no, 0x12, 0x000f);
+            miim_write_func(vtss_state, port_no, 0x11, 0x83e0);
+            miim_write_func(vtss_state, port_no, 0x10, 0x8c82);
+        }
+    } else {            // MEDIA
+        if (enable) {      // Enable
+            /* Set the Pattern */
+            /* Note: This makes it ORDER Dependant!! */
+            /* If MAC is called first to enable, this code will disable MAC */
+            miim_write_func(vtss_state, port_no, 0x12, 0x000f);
+            miim_write_func(vtss_state, port_no, 0x11, 0x83e0);
+            miim_write_func(vtss_state, port_no, 0x10, 0x8c82);
+
+            miim_write_func(vtss_state, port_no, 0x12, 0x0001);
+            miim_write_func(vtss_state, port_no, 0x11, 0x1041);
+            miim_write_func(vtss_state, port_no, 0x10, 0x9e80);
+        } else {           // Disable
+            miim_write_func(vtss_state, port_no, 0x12, 0x0001);
+            miim_write_func(vtss_state, port_no, 0x11, 0x1001);
+            miim_write_func(vtss_state, port_no, 0x10, 0x9e80);
+        }
+    }
+
+    miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_STANDARD);
+
+    return (rc);
+}
+
+/* *********************************************************************************** */
+/* The following code checks Config to see if there was an Early Exit previously       */
+/* *********************************************************************************** */
+/* For Tesla PHY, Reg30, bit 13 (Reg30.13) is used to store in HW when OOS Recovery has been activated */
+BOOL vtss_phy_ts_is_oos_recovery_enabled_private (vtss_state_t *vtss_state, vtss_port_no_t  port_no)
+{
+    vtss_rc              rc = 0;
+    vtss_phy_type_t      phy_id;
+    u16                  value = 0;
+    BOOL                 oos_recov_enabled = FALSE;
+
+    memset(&phy_id, 0, sizeof(vtss_phy_type_t));
+
+    if ((rc = PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE, VTSS_PHY_PAGE_STANDARD)) != VTSS_RC_OK) {
+        VTSS_E("TESLA_OOS: Failed to set page to VTSS_PHY_PAGE_STANDARD, port-no: %d\n", port_no);
+    }
+
+    if ((rc = vtss_phy_id_get_priv(vtss_state, port_no, &phy_id)) != VTSS_RC_OK) {
+        VTSS_E("TESLA_OOS: Failed to get PHY_ID, port-no: %d\n", port_no);
+    }
+
+    if ((phy_id.part_number == VTSS_PHY_TYPE_8574) || (phy_id.part_number == VTSS_PHY_TYPE_8572)) {
+        if ((rc = PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_LED_BEHAVIOR, &value)) != VTSS_RC_OK) {
+            VTSS_E("TESLA_OOS: Failed to read VTSS_F_PHY_LED_BEHAVIOR_OOS_RECOVERY_ENABLE, port-no: %d\n", port_no);
+        }
+        if (value & VTSS_F_PHY_LED_BEHAVIOR_OOS_RECOVERY_ENABLE) {
+            VTSS_D("TESLA_OOS: Detecting Reg30.13 Set, Prev OOS Recovery had Premature-Exit - Must Re-Run OOS! port: %d", port_no);
+            oos_recov_enabled = TRUE;
+        }
+    }
+
+    return(oos_recov_enabled);
+}
+
+/* For Tesla PHY, Reg30, bit 13 (Reg30.13) is used to store in HW when OOS Recovery has been activated */
+/* Any one of the following settings will cause Packet Loss and must be Removed so that traffic can flow again */
+/* If OOS Recovery Bit in Reg30.13 is set, that means OOS Recovery exited prematurely and likely has one or all of the following settings:  */
+/* If the EPG is enabled, the PHY is configured so that MAC TX data will Not be sent out the PHY */
+/* If the MAC Isolate is enabled, the PHY is configured so that MAC RX data will Not be sent from the PHY */
+/* If the MAC SerDes TEST mode is enabled, the PHY is configured so that MAC SerDes i/f to MAC is DOWN */
+/* If the MEDIA SerDes TEST mode is enabled, the PHY is configured so that MEDIA SerDes i/f to Link Partner is DOWN */
+/* If the NE and FE Loopbacks are both enabled, the PHY is configured in an invalid operational mode */
+/* This function checks ALL of the above settings.  If settings prevent traffic flow, they are changes to allow traffic */
+/* Return Values:  VTSS_RC_OK = Disable was successful,  */
+/*                 VTSS_RC_ERROR = Disable was not successful and traffic flow likely not possible */
+vtss_rc vtss_phy_ts_tesla_oos_recovery_disable_priv(vtss_state_t *vtss_state, vtss_port_no_t  port_no, const vtss_debug_printf_t  pr)
+{
+    vtss_rc          rc = VTSS_RC_OK;
+    vtss_phy_type_t  phy_id;
+    u16              value = 0;
+    u16  media_operating_mode = 0;
+    BOOL oos_recov_enabled = FALSE;
+    BOOL fe_loopback = FALSE;
+    BOOL ne_loopback = FALSE;
+    BOOL mac_isolate = FALSE;
+    BOOL epg_enabled = FALSE;
+    BOOL is_mac_tst_ena   = FALSE;  /* MAC SerDes enabled or in TEST Mode ? */
+    BOOL is_media_tst_ena = FALSE;  /* Media SerDes enabled or in TEST Mode ? */
+    vtss_miim_read_t        miim_read_func;
+    vtss_miim_write_t       miim_write_func;
+
+    miim_read_func = vtss_state->init_conf.miim_read;
+    miim_write_func = vtss_state->init_conf.miim_write;
+
+    memset(&phy_id, 0, sizeof(vtss_phy_type_t));
+
+    if ((rc = vtss_phy_id_get_priv(vtss_state, port_no, &phy_id)) != VTSS_RC_OK) {
+        VTSS_E("TESLA_OOS: Failed to get PHY_ID, port-no: %d\n", port_no);
+    }
+
+    VTSS_I("PHY Identified:PortID:%d PHY: %d Rev:%d Channel:%d  Channel count:%d Baseport:%d\n",
+           port_no, phy_id.part_number, phy_id.revision, phy_id.channel_id, phy_id.port_cnt, phy_id.base_port_no);
+
+    if ((phy_id.part_number == VTSS_PHY_TYPE_8574) || (phy_id.part_number == VTSS_PHY_TYPE_8572)) {
+        oos_recov_enabled = vtss_phy_ts_is_oos_recovery_enabled_private(vtss_state, port_no);
+
+        if ((rc = vtss_phy_ts_tesla_serdes_test_mode_get(vtss_state, port_no, &is_mac_tst_ena, &is_media_tst_ena)) != VTSS_RC_OK) {
+            VTSS_I("TESLA_OOS: Failure occurred when checking MAC/MEDIA SerDes TEST Mode config on port: %d", port_no);
+            //pr("Failure occurred when checking MAC/MEDIA SerDes TEST Mode config on port: %d\n", port_no);
+        }
+
+        if ((rc = PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_PHY_CONTROL, &value)) != VTSS_RC_OK) {
+            VTSS_I("TESLA_OOS: Failed to get Media_Operating_Mode, port-no: %d\n", port_no);
+        }
+        media_operating_mode = (value & VTSS_M_PHY_EXTENDED_PHY_CONTROL_MEDIA_OPERATING_MODE) >> 8;
+
+        if (value & VTSS_F_PHY_EXTENDED_PHY_CONTROL_FAR_END_LOOPBACK_MODE) {
+            VTSS_I("Entering OOS Recovery: Far-End Loopback is Enabled! port: %d", port_no);
+            //pr("Entering OOS Recovery: Far-End Loopback is Enabled! port: %d\n", port_no);
+            fe_loopback = TRUE;
+        }
+
+        if (media_operating_mode == 2) {
+            VTSS_I("Entering OOS Recovery: Media Operating Mode is already configured for 1000BaseX Fiber/SFP Media! port: %d", port_no);
+            //pr("Entering OOS Recovery: Media Operating Mode is already configured for 1000BaseX Fiber/SFP Media! port: %d\n", port_no);
+        }
+
+        value = 0;
+        if ((rc = PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_MODE_CONTROL, &value)) != VTSS_RC_OK) {
+            VTSS_I("TESLA_OOS: Failed to get Mode_Control, port-no: %d\n", port_no);
+        }
+
+        if (value & VTSS_F_PHY_MODE_CONTROL_LOOP) {
+            VTSS_I("Entering OOS Recovery: Near-End Loopback is Enabled! port: %d", port_no);
+            //pr("Entering OOS Recovery: Near-End Loopback is Enabled! port: %d\n", port_no);
+            ne_loopback = TRUE;
+        }
+
+        if (value & VTSS_F_PHY_MODE_CONTROL_MAC_ISOLATE) {
+            VTSS_I("Entering OOS Recovery: PHY MAC Isolate Enabled - MAC Rx Disabled - Total Packet Loss - MAC Rx!!  port: %d", port_no);
+            //pr("Entering OOS Recovery: PHY MAC Isolate Enabled - MAC Rx Disabled - Total Packet Loss - MAC Rx!!  port: %d\n", port_no);
+            mac_isolate = TRUE;
+        }
+
+        if (value & VTSS_F_PHY_MODE_CONTROL_AUTO_NEG_ENA) {
+            VTSS_I("Entering OOS Recovery: ANEG Disabled!!  port: %d", port_no);
+            //pr("Entering OOS Recovery: ANEG Disabled!!  port: %d\n", port_no);
+        }
+
+        /* Switch to extended page 1 */
+        if ((rc = PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE, VTSS_PHY_PAGE_EXTENDED)) != VTSS_RC_OK) {
+            VTSS_E("TESLA_OOS: Failed to set page to VTSS_PHY_PAGE_EXTENDED, port-no: %d\n", port_no);
+        }
+
+        value = 0;
+        if ((rc = PHY_RD_PAGE(vtss_state, port_no, EPG_CTRL_REG_1, &value)) != VTSS_RC_OK) {
+            VTSS_E("TESLA_OOS: Failed to read page to EPG_CTRL_REG_1, port-no: %d\n", port_no);
+        }
+
+        if (value & EPG_CTRL_REG_1_EPG_ENABLE) {
+            VTSS_I("Entering OOS Recovery: EPG Enabled - EPG Mux Enabled - MAC Tx Disabled - Total Packet Loss - MAC Tx!!  port: %d", port_no);
+            //pr("Entering OOS Recovery: EPG Enabled - EPG Mux Enabled - MAC Tx Disabled - Total Packet Loss - MAC Tx!!  port: %d\n", port_no);
+            epg_enabled = TRUE;
+        }
+
+        if ((rc = PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE, VTSS_PHY_PAGE_STANDARD)) != VTSS_RC_OK) {
+            VTSS_E("TESLA_OOS: Failed to set page to VTSS_PHY_PAGE_STANDARD, port-no: %d\n", port_no);
+        }
+
+        /* For Tesla PHY, Reg30, bit 13 (Reg30.13) is used to store in HW when OOS Recovery has been activated */
+        /* If OOS Recovery Bit in Reg30.13 is set, */
+        /*    that means OOS Recovery exited prematurely and likely has one or all of the following settings:  */
+        /* During the Tesla OOS Recovery, the PHY is completely isolated, thus this isolation must be undone for normal operation */
+        /* If the EPG is enabled, the PHY is configured so that MAC TX data path is muxed and data will Not be sent out the PHY */
+        /* If the MAC Isolate is enabled, the PHY is configured so that MAC RX data will Not be sent to the MAC from the PHY */
+        /* If the MAC SerDes TEST mode is enabled, the PHY is configured so that MAC SerDes i/f to MAC is DOWN */
+        /* If the MEDIA SerDes TEST mode is enabled, the PHY is configured so that MEDIA SerDes i/f to Link Partner is DOWN */
+        /* If the NE and FE Loopbacks are both enabled, the PHY is configured in an invalid operational mode */
+        /*    the NE and FE Loopbacks are setup so that packets can circulate within the isolated PHY */
+
+        /* In the event there was a failure, Ensure EPG and Loopbacks are Disabled */
+        /* Disable EPG */
+        /* Make Sure that the EPG is Disabled Before Analyzer Reconfig !! */
+        if (epg_enabled) {
+            miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_EXTENDED);
+            value = 0x0;
+            miim_write_func(vtss_state, port_no, 0x1d, value);
+            miim_read_func(vtss_state, port_no, 0x1d, &value);
+            miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_STANDARD);
+            VTSS_I("Port_No: %d, Disabling EPG, Turning OFF: Reading Ext:%d Reg:%02d: 0x%04X \n", port_no, VTSS_PHY_PAGE_EXTENDED, 0x1d, value);
+        }
+
+        if (fe_loopback || ne_loopback) {
+            /* Disable ALL LoopBack configurations       */
+            vtss_state->phy_state[port_no].loopback.far_end_enable = FALSE;
+            vtss_state->phy_state[port_no].loopback.near_end_enable = FALSE;
+            vtss_state->phy_state[port_no].loopback.connector_enable = FALSE;
+            vtss_state->phy_state[port_no].loopback.mac_serdes_input_enable = FALSE;
+            vtss_state->phy_state[port_no].loopback.mac_serdes_facility_enable = FALSE;
+            vtss_state->phy_state[port_no].loopback.mac_serdes_equipment_enable = FALSE;
+            vtss_state->phy_state[port_no].loopback.media_serdes_input_enable = FALSE;
+            vtss_state->phy_state[port_no].loopback.media_serdes_facility_enable = FALSE;
+            vtss_state->phy_state[port_no].loopback.media_serdes_equipment_enable = FALSE;
+            if ((rc = vtss_phy_loopback_set_private( vtss_state, port_no)) != VTSS_RC_OK) {
+                VTSS_E("ERROR during Disable ALL Loopbacks");
+                return(VTSS_RC_ERROR);
+            }
+            VTSS_I("Disabling ALL Loopbacks");
+        }
+
+        if (mac_isolate) {
+            /* Clear the MAC Isolate bit to Enable MAC i/f  */
+            miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_STANDARD);
+            miim_read_func(vtss_state, port_no, 0x0, &value);
+            value &= ~(1 << 10);    // Enable MAC i/f - Clearing MAC ISOLATE BIT
+            miim_write_func(vtss_state, port_no, 0x0, value);
+            miim_read_func(vtss_state, port_no, 0x0, &value);
+            VTSS_I("Cleared MAC Isolate, Reg 0: 0x%x", value);
+        }
+
+        // MEDIA i/f
+        if (is_media_tst_ena) {
+            VTSS_I("Disable of SerDes Test Mode MEDIA i/f and MAC i/f\n");
+            if ((rc = vtss_phy_ts_tesla_serdes_test_mode_set(vtss_state, port_no, FALSE, FALSE)) != VTSS_RC_OK) {
+                VTSS_E("Disable of SerDes Test Mode on MEDIA i/f failed");
+                return(VTSS_RC_ERROR);
+            }
+        }
+
+
+        // MAC i/f
+        if (is_mac_tst_ena) {
+            if ((rc = vtss_phy_ts_tesla_serdes_test_mode_set(vtss_state, port_no, TRUE, FALSE)) != VTSS_RC_OK) {
+                VTSS_E("Disable of SerDes Test Mode on MAC i/f failed\n");
+                return(VTSS_RC_ERROR);
+            }
+        }
+
+        if (oos_recov_enabled || epg_enabled || mac_isolate || is_mac_tst_ena || is_media_tst_ena || (fe_loopback && ne_loopback)) {
+            VTSS_I("WARNING: PHY WAS CONFIGURED FOR OOS RECOVERY! NOW DISABLED - Must Re-Run OOS Recovery <<<< port: %d", port_no);
+          //pr("WARNING: PHY WAS CONFIGURED FOR OOS RECOVERY! NOW DISABLED - Must Re-Run OOS Rcovery <<<< port: %d \n", port_no);
+        }
+    }
+    return(VTSS_RC_OK);
+}
+
 
 static vtss_rc vtss_phy_ts_tesla_epg_da_sa_get(vtss_match_type_t match_mode, u16  *value)
 {
@@ -169,48 +499,6 @@ static vtss_rc vtss_phy_ts_tesla_epg_da_sa_get(vtss_match_type_t match_mode, u16
         *value |= (8 << 2); //match SA on FF:FF:FF:FF:FF:F8
         break;
     }
-    return (rc);
-}
-
-static vtss_rc vtss_phy_ts_tesla_serdes_test_mode_set(vtss_state_t  *vtss_state, vtss_port_no_t   port_no, BOOL is_mac_if, BOOL enable)
-{
-    vtss_rc            rc = VTSS_RC_OK;
-    vtss_miim_write_t  miim_write_func = vtss_state->init_conf.miim_write;
-
-    VTSS_I("Configure SerDes Test Mode for port_no: %d,  Is_Mac?: 0x%x,  enable?: 0x%x\n", port_no, is_mac_if, enable);
-    miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_TR);
-
-    if (is_mac_if) {    // MAC
-        if (enable) {      // Enable
-            miim_write_func(vtss_state, port_no, 0x12, 0x001f);
-            miim_write_func(vtss_state, port_no, 0x11, 0x83e0);
-            miim_write_func(vtss_state, port_no, 0x10, 0x8c82);
-        } else {           // Disable
-            miim_write_func(vtss_state, port_no, 0x12, 0x000f);
-            miim_write_func(vtss_state, port_no, 0x11, 0x83e0);
-            miim_write_func(vtss_state, port_no, 0x10, 0x8c82);
-        }
-    } else {            // MEDIA
-        if (enable) {      // Enable
-            /* Set the Pattern */
-            /* Note: This makes it ORDER Dependant!! */
-            /* If MAC is called first to enable, this code will disable MAC */
-            miim_write_func(vtss_state, port_no, 0x12, 0x000f);
-            miim_write_func(vtss_state, port_no, 0x11, 0x83e0);
-            miim_write_func(vtss_state, port_no, 0x10, 0x8c82);
-
-            miim_write_func(vtss_state, port_no, 0x12, 0x0001);
-            miim_write_func(vtss_state, port_no, 0x11, 0x1041);
-            miim_write_func(vtss_state, port_no, 0x10, 0x9e80);
-        } else {           // Disable
-            miim_write_func(vtss_state, port_no, 0x12, 0x0001);
-            miim_write_func(vtss_state, port_no, 0x11, 0x1001);
-            miim_write_func(vtss_state, port_no, 0x10, 0x9e80);
-        }
-    }
-
-    miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_STANDARD);
-
     return (rc);
 }
 
@@ -3742,8 +4030,8 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_det_read_ts_fifo(vtss_state_t *vt
 {
 
     vtss_rc                         rc = VTSS_RC_OK;
-    vtss_port_no_t                  base_port_no=0;
-    vtss_port_no_t                  cfgport=0;
+    vtss_port_no_t                  base_port_no = 0;
+    vtss_port_no_t                  cfgport = 0;
     u32   loop_cnt = 5;
     u32   fifo_val[7] = {0, 0, 0, 0, 0, 0, 0}, value = 0;
     u32   depth = 10000; // max depth is 8, this ensures timestamp is checked on first pass through ts check loop
@@ -3994,24 +4282,24 @@ static vtss_rc vtss_phy_ts_tesla_fifo_sync_port_reset_priv(vtss_state_t         
         value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_MEDIA_OPERATING_MODE(0x0); // VTSS_PHY_MEDIA_IF_CU
         value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_AMS_PREFERENCE;            // AMS Preference = Cat5 Copper, but not in AMS mode
     } else if (vtss_state->phy_state[port_no].reset.media_if == VTSS_PHY_MEDIA_IF_SFP_PASSTHRU) {
-        value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_MEDIA_OPERATING_MODE(0x1); // Protcol Transfer Mode = CuSFP 
+        value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_MEDIA_OPERATING_MODE(0x1); // Protcol Transfer Mode = CuSFP
     } else if (vtss_state->phy_state[port_no].reset.media_if == VTSS_PHY_MEDIA_IF_FI_1000BX) {
         value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_MEDIA_OPERATING_MODE(0x2);
     } else if (vtss_state->phy_state[port_no].reset.media_if == VTSS_PHY_MEDIA_IF_FI_100FX) {
         value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_MEDIA_OPERATING_MODE(0x3); // VTSS_PHY_MEDIA_IF_FI_1000BX
     } else if (vtss_state->phy_state[port_no].reset.media_if == VTSS_PHY_MEDIA_IF_AMS_CU_PASSTHRU) {
         value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_MEDIA_OPERATING_MODE(0x5);
-        value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_AMS_PREFERENCE;            // AMS Preference = Cat5 Copper 
+        value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_AMS_PREFERENCE;            // AMS Preference = Cat5 Copper
     } else if (vtss_state->phy_state[port_no].reset.media_if == VTSS_PHY_MEDIA_IF_AMS_FI_PASSTHRU) {
         value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_MEDIA_OPERATING_MODE(0x5); // AMS Preference = SerDes SFP Prtocol Transfer Mode
     } else if (vtss_state->phy_state[port_no].reset.media_if == VTSS_PHY_MEDIA_IF_AMS_CU_1000BX) {
         value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_MEDIA_OPERATING_MODE(0x6);
-        value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_AMS_PREFERENCE;            // AMS Preference = Cat5 Copper 
+        value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_AMS_PREFERENCE;            // AMS Preference = Cat5 Copper
     } else if (vtss_state->phy_state[port_no].reset.media_if == VTSS_PHY_MEDIA_IF_AMS_FI_1000BX) {
         value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_MEDIA_OPERATING_MODE(0x6); // AMS Preference = SerDes SFP 1000BaseX Fiber
     } else if (vtss_state->phy_state[port_no].reset.media_if == VTSS_PHY_MEDIA_IF_AMS_CU_100FX) {
         value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_MEDIA_OPERATING_MODE(0x7);
-        value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_AMS_PREFERENCE;            // AMS Preference = Cat5 Copper 
+        value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_AMS_PREFERENCE;            // AMS Preference = Cat5 Copper
     } else if (vtss_state->phy_state[port_no].reset.media_if == VTSS_PHY_MEDIA_IF_AMS_FI_100FX) {
         value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_MEDIA_OPERATING_MODE(0x7); // AMS Preference = SerDes SFP 100FX Fiber
     } else {
@@ -4076,6 +4364,10 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
     u32                     temp32 = 0;
     u32                     si_cfg = 0;
     u32                     value32 = 0;
+    u32                     sport_mask = 0;
+    u32                     sport_val = 0;
+    u32                     dport_mask = 0;
+    u32                     dport_val = 0;
     u16                     channel_id = 0;
     u16                     counter1 = 0;
     u16                     counter2 = 0;
@@ -4095,6 +4387,7 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
 
     /* Set OOS Flag to FALSE until we start recovery and set it otherwise */
     *OOS = FALSE;
+    recov->recovery_required = FALSE;
 
     memset(&phy_id, 0, sizeof(vtss_phy_type_t));
 
@@ -4116,22 +4409,67 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
         return VTSS_RC_OK;
     }
 
+
     VTSS_I("Entering Tesla OOS Recovery Sequence: FIFO Re-Sync, port_no: %d\n", port_no);
 
     recov->port_no = port_no; /* Save for Recovery in event of ERROR-Exit */
     recov->phy_id = phy_id;   /* Save for Recovery in event of ERROR-Exit */
     recov->phy_id_sav = TRUE; /* Save for Recovery in event of ERROR-Exit */
 
+    /* Check the Tesla Chip Rev. Don't run the resync code for revE*/
+    value32 = 0;
+    VTSS_PHY_TS_SPI_PAUSE_PRIV(port_no);
+    if ((rc = VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0),
+                                   VTSS_PTP_IP_1588_TOP_CFG_STAT_VERSION_CODE, &value32)) != VTSS_RC_OK) {
+        pr("CSR Access failed: VTSS_PTP_IP_1588_TOP_CFG_STAT_VERSION_CODE \n");
+        VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+        return VTSS_RC_ERROR;
+    }
+    VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+
+    /* In API 4.20 and API 4.49, the 4th param passed is a BOOLEAN instead of a pointer to fifo_conf */
+    /* Therefore, the Application written for API 4.20 and 4.49 would have the 4th Param to be 0=FALSE */
+    /* A 0=NULL Ptr if passed as fifo_conf and be considered the same as a Boolean FALSE, as both evaluate to 0 */
+    if (fifo_conf) {
+        if (fifo_conf->skip_rev_check) {
+            pr("Skipping Tesla Rev_Check \n");
+        } else {
+            if ((value32 & 0xff) >= VTSS_PTP_IP_1588_VERSION_2_1) {
+                pr("Tesla Rev-E: FIFO Re-Sync not needed \n");
+                return VTSS_RC_OK;
+            } else {
+                pr("Tesla Rev-C/D: Running FIFO Re-Sync..\n");
+            }
+        }
+    } else {
+        if ((value32 & 0xff) >= VTSS_PTP_IP_1588_VERSION_2_1) {
+            pr("Tesla Rev-E: FIFO Re-Sync not needed \n");
+            return VTSS_RC_OK;
+        } else {
+            pr("Tesla Rev-C/D: fifo_conf=NULL; Running FIFO Re-Sync..\n");
+        }
+    }
+
+   /* *********************************************************************************** */
+   /* The following code checks Config to see if there was an Early Exit previously       */
+   /* *********************************************************************************** */
+    if ((rc = vtss_phy_ts_tesla_oos_recovery_disable_priv(vtss_state, port_no, pr)) != VTSS_RC_OK) {
+        VTSS_E("ERROR: PHY WAS CONFIGURED FOR OOS RECOVERY! UNABLE to fully DISABLED - HW Reset may be Required <<<< port: %d", port_no);
+    }
+
+   /* *********************************************************************************** */
+   /* The following code checks the MEDIA I/f Config / Media Operating Mode in SW and HW  */
+   /* *********************************************************************************** */
     value = 0;
     VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_PHY_CONTROL, &value));
     recov->phy_control_reg = value; /* Save the Operating mode for Recovery in event of ERROR-Exit */
     recov->phy_control_reg_sav = TRUE; /* Save the Operating mode for Recovery in event of ERROR-Exit */
     media_operating_mode = (value & VTSS_M_PHY_EXTENDED_PHY_CONTROL_MEDIA_OPERATING_MODE) >> 8;
-    VTSS_I("OOS Entry: Media i/f Config in PHYInst:0x%x, in HW_Reg23:0x%04x OOS Patch port-no: %d \n", vtss_state->phy_state[port_no].reset.media_if, value, port_no);
-    pr("OOS Entry: Media i/f Config in PHYInst:0x%x, in HW_Reg23:0x%04x OOS Patch port-no: %d \n", vtss_state->phy_state[port_no].reset.media_if, value, port_no);
+    VTSS_I("OOS Entry: Media i/f Config in PHY_Inst:0x%x, in HW_Reg23:0x%04x OOS Patch port-no: %d \n", vtss_state->phy_state[port_no].reset.media_if, value, port_no);
+    pr("OOS Entry: Media i/f Config in PHY_Inst:0x%x, in HW_Reg23:0x%04x OOS Patch port-no: %d \n", vtss_state->phy_state[port_no].reset.media_if, value, port_no);
 
-/* If this is defined, then Media i/f check is preformed, CuSFP is not supported */
-/* This is configurable, based upon the board layout, so the User may set or clear this option */
+    /* If this is defined, then Media i/f check is preformed, CuSFP is not supported */
+    /* This is configurable, based upon the board layout, so the User may set or clear this option */
 //#define _PROTO_TRANSFER_MEDIA_IF_MODE_NOT_SUPPORT  /* If Defined, CuSFP Media is not supported */
 #undef _PROTO_TRANSFER_MEDIA_IF_MODE_NOT_SUPPORT     /* If UnDefined, CuSFP Media is supported */
 
@@ -4158,7 +4496,7 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
         return VTSS_RC_INV_STATE;
     }
 #endif  // End of _CHECK_MEDIA_IF_MODE
-/* End of Media i/f check, CuSFP -> protocol transfer mode is not supported */
+    /* End of Media i/f check, CuSFP -> protocol transfer mode is not supported */
 
     if (vtss_state->phy_ts_port_conf[port_no].port_ts_init_done == FALSE) {
         VTSS_I("Port ts not initialized! port: %d", port_no);
@@ -4172,12 +4510,14 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
     cfgport = base_port_no;
 
     /* Check whether PTP-IP-ETH encapsulation is enabled on the engine */
+    /* Note: If fifo_conf == NULL, that appears to be the same as a Boolean "FALSE" */
     if (fifo_conf == NULL) {
         eng_id = VTSS_PHY_TS_PTP_ENGINE_ID_0;
     } else {
         eng_id = (fifo_conf->eng_recov > VTSS_PHY_TS_PTP_ENGINE_ID_1) ?
                  VTSS_PHY_TS_PTP_ENGINE_ID_0 : fifo_conf->eng_recov;
     }
+
     if ((vtss_state->phy_ts_port_conf[base_port_no].ingress_eng_conf[eng_id].eng_used == FALSE) ||
         (vtss_state->phy_ts_port_conf[base_port_no].ingress_eng_conf[eng_id].encap_type
          != VTSS_PHY_TS_ENCAP_ETH_IP_PTP)) {
@@ -4191,27 +4531,8 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
         return VTSS_RC_INV_STATE;
     }
 
-    VTSS_PHY_TS_SPI_PAUSE_PRIV(port_no);
-
-    /* Check the Tesla Chip Rev. Don't run the resync code for revE*/
-    value32 = 0;
-    if ((rc = VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0),
-                                   VTSS_PTP_IP_1588_TOP_CFG_STAT_VERSION_CODE, &value32)) != VTSS_RC_OK) {
-        pr("CSR Access failed: VTSS_PTP_IP_1588_TOP_CFG_STAT_VERSION_CODE \n");
-        VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
-        return VTSS_RC_ERROR;
-    }
-
-    if(!fifo_conf->skip_rev_check){
-        if ((value32 & 0xff) >= VTSS_PTP_IP_1588_VERSION_2_1) {
-            pr("Tesla Rev-E: FIFO Re-Sync not needed \n");
-            VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
-            return VTSS_RC_OK;
-        } else {
-            pr("Tesla Rev-C/D: Running FIFO Re-Sync..\n");
-        }
-    }
     /* Check if 1588 clock is enabled or not */
+    VTSS_PHY_TS_SPI_PAUSE_PRIV(port_no);
     value32 = 0;
     if ((rc = VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_PROC_BLK_ID(0),
                                    VTSS_PTP_IP_1588_TOP_CFG_STAT_INTERFACE_CTL, &value32)) != VTSS_RC_OK) {
@@ -4241,9 +4562,11 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
     VTSS_I("VTSS_PTP_IP_1588_TOP_CFG_STAT_ANALYZER_MODE:%x port_no:%d\n", value32, port_no);
 
     if (fifo_conf == NULL) {
-        VTSS_E("FIFO Configuration for OOS_Recovery is NULL: Returning ERROR for port_no: %d\n", port_no);
-        VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
-        return VTSS_RC_ERROR;
+        /* Fixed Config */
+        detect_only = FALSE;
+        eng_id = VTSS_PHY_TS_PTP_ENGINE_ID_0;
+        eng_minE = VTSS_PHY_TS_OAM_ENGINE_ID_2A;
+        VTSS_I("FIFO Configuration for OOS_Recovery is NULL: Recov_Eng:Eng_0  Mini_E_Eng:Eng_2A port_no: %d\n", port_no);
     } else {
         detect_only = fifo_conf->detect_only;
         eng_id = fifo_conf->eng_recov;
@@ -4254,24 +4577,124 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
 
     /* Check if Engine-0 or Engine-1 are enabled or not */
     /* Check if the Designated Eng for Primary OOS Recovery is configured for ETH-IPv4-PTP */
-    switch(eng_id) {
+    switch (eng_id) {
     case VTSS_PHY_TS_PTP_ENGINE_ID_0:
         if ((value32 & VTSS_TS_ENG0_ENABLED) == VTSS_TS_ENG0_ENABLED) {
             pr("Engine Id:%d, Designated for Primary OOS Recovery (eng_recov) is Enabled! \n", eng_id);
             value32 = 0;
             if ((rc = VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_ANA_BLK_ID_ING_0,
-                                   VTSS_ANA_ETH1_NXT_PROTOCOL_ETH1_ETYPE_MATCH, &value32)) != VTSS_RC_OK) {
+                                           VTSS_ANA_ETH1_NXT_PROTOCOL_ETH1_ETYPE_MATCH, &value32)) != VTSS_RC_OK) {
                 pr("CSR Access failed: Initial Reading VTSS_PTP_IP_1588_TOP_CFG_STAT_ANALYZER_MODE \n");
-        VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
                 return VTSS_RC_ERROR;
             }
 
             if (value32 == 0x0800) {   /* IPv4 */
                 pr("Engine Id:%d, Eng_0 designated for Primary OOS Recovery, ENCAP is ETH-IP-PTP (0x%x)! \n", eng_id, value32);
                 VTSS_I("Engine Id:%d, Eng_0 designated for Primary OOS Recovery, ENCAP is ETH-IP-PTP (0x%x)! \n", eng_id, value32);
-    } else {
+            } else {
                 pr("INVALID CONFIG: Engine Id:%d, Eng_0 designated for Primary OOS Recovery, ENCAP is NOT ETH-IP-PTP (0x%x)! \n", eng_id, value32);
                 VTSS_E("INVALID CONFIG: Engine Id:%d, Eng_0 designated for Primary OOS Recovery, ENCAP is NOT ETH-IP-PTP (0x%x)! \n", eng_id, value32);
+                VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                return VTSS_RC_ERROR;
+            }
+
+            /* Ingress - If UDP Sport_MASK is Non-Zero, We have to check the Value, it should be 319 or 0x013F  */
+            if ((rc = VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_ANA_BLK_ID_ING_0,
+                                           VTSS_ANA_IP1_NXT_PROTOCOL_IP1_PROT_MATCH_2_UPPER,
+                                           &value32)) != VTSS_RC_OK) {
+                pr("CSR Access failed: Initial Reading VTSS_ANA_IP1_NXT_PROTOCOL_IP1_PROT_MATCH_2_UPPER \n");
+                VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                return VTSS_RC_ERROR;
+            }
+            sport_val = (value32 & 0xffff0000) >> 16;
+            dport_val = (value32 & 0x0000ffff);
+
+            if ((rc = VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_ANA_BLK_ID_ING_0,
+                                           VTSS_ANA_IP1_NXT_PROTOCOL_IP1_PROT_MASK_2_UPPER,
+                                           &value32)) != VTSS_RC_OK) {
+                pr("CSR Access failed: Initial Reading VTSS_ANA_IP1_NXT_PROTOCOL_IP1_PROT_MASK_2_UPPER \n");
+                VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                return VTSS_RC_ERROR;
+            }
+            sport_mask = (value32 & 0xffff0000) >> 16;
+            dport_mask = (value32 & 0x0000ffff);
+
+            VTSS_I("Engine Id:%d, INGRESS: OOS Recovery, ETH-IP-PTP UDP Sport_M: 0x%04x, Sport_Val:0x%04x, Dport_M:0x%04x, Dport_Val:0x%04x",
+                   eng_id, sport_mask, sport_val, dport_mask, dport_val);
+            pr("Engine Id:%d, INGRESS: OOS Recovery, ETH-IP-PTP UDP Sport_M: 0x%04x, Sport_Val:0x%04x, Dport_M:0x%04x, Dport_Val:0x%04x\n",
+               eng_id, sport_mask, sport_val, dport_mask, dport_val);
+
+            /* If the UDP Sport_Mask is set, the only value that can be used for OOS Recovery to work is 319 or 0x013F */
+            if ((sport_mask)) {
+                /* Must check for UDP Value, but also Apply the Mask to ensure Both are correct */
+                if ((sport_val & sport_mask) == 319) {
+                    VTSS_I("Engine Id:%d, ING: Primary OOS Recovery, ENCAP is ETH-IP-PTP,  UDP Sport_Val: 0x%04x ", eng_id, sport_val);
+                } else {
+                    pr("ERROR in Config: Engine Id:%d, ING: Primary OOS Recovery, ENCAP is ETH-IP-PTP, UDP Sport_Val != 0x013F Sport_Val: 0x%04x \n", eng_id, sport_val);
+                    VTSS_E("ERROR in Config: Engine Id:%d, ING: Primary OOS Recovery, ENCAP is ETH-IP-PTP, UDP Sport_Val != 0x013F Sport_Val: 0x%04x ", eng_id, sport_val);
+                    VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                    return VTSS_RC_ERROR;
+                }
+            } else {
+                pr("Engine Id:%d, ING: Primary OOS Recovery, ENCAP is ETH-IP-PTP,  UDP Sport_MASK: 0x%04x \n", eng_id, sport_mask);
+                VTSS_I("Engine Id:%d, ING: Primary OOS Recovery, ENCAP is ETH-IP-PTP,  UDP Sport_MASK: 0x%04x ", eng_id, sport_mask);
+            }
+
+            /* Check UDP Dest Port, For PTP Setup, It is required to be 319 or 0x013F */
+            if ((dport_val & dport_mask) != 319) {
+                pr("ERROR in Config: Engine Id:%d, ING: Primary OOS Recovery, ENCAP is ETH-IP-PTP, UDP Dport_Val != 0x013F Dport_Val: 0x%04x \n", eng_id, dport_val);
+                VTSS_E("ERROR in Config: Engine Id:%d, ING: Primary OOS Recovery, ENCAP is ETH-IP-PTP, UDP Dport_Val != 0x013F Dport_Val: 0x%04x ", eng_id, dport_val);
+                VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                return VTSS_RC_ERROR;
+            }
+
+            /* Egress - If UDP Sport_MASK is Non-Zero, We have to check the Value, it should be 319 or 0x013f  */
+            if ((rc = VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_ANA_BLK_ID_EGR_0,
+                                           VTSS_ANA_IP1_NXT_PROTOCOL_IP1_PROT_MATCH_2_UPPER,
+                                           &value32)) != VTSS_RC_OK) {
+                pr("CSR Access failed: Initial Reading VTSS_ANA_IP1_NXT_PROTOCOL_IP1_PROT_MATCH_2_UPPER \n");
+                VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                return VTSS_RC_ERROR;
+            }
+            sport_val = (value32 & 0xffff0000) >> 16;
+            dport_val = (value32 & 0x0000ffff);
+
+            if ((rc = VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_ANA_BLK_ID_EGR_0,
+                                           VTSS_ANA_IP1_NXT_PROTOCOL_IP1_PROT_MASK_2_UPPER,
+                                           &value32)) != VTSS_RC_OK) {
+                pr("CSR Access failed: Initial Reading VTSS_ANA_IP1_NXT_PROTOCOL_IP1_PROT_MASK_2_UPPER \n");
+                VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                return VTSS_RC_ERROR;
+            }
+            sport_mask = (value32 & 0xffff0000) >> 16;
+            dport_mask = (value32 & 0x0000ffff);
+
+            VTSS_I("Engine Id:%d, EGRESS: OOS Recovery, ETH-IP-PTP UDP Sport_M: 0x%04x, Sport_Val:0x%04x, Dport_M:0x%04x, Dport_Val:0x%04x",
+                   eng_id, sport_mask, sport_val, dport_mask, dport_val);
+            pr("Engine Id:%d, EGRESS: OOS Recovery, ETH-IP-PTP UDP Sport_M: 0x%04x, Sport_Val:0x%04x, Dport_M:0x%04x, Dport_Val:0x%04x\n",
+               eng_id, sport_mask, sport_val, dport_mask, dport_val);
+
+            /* If the UDP Sport_Mask is set, the only value that can be used for OOS Recovery to work is 319 or 0x013F */
+            if ((sport_mask)) {
+                /* Must check for UDP Value, but also Apply the Mask to ensure Both are correct */
+                if ((sport_val & sport_mask) == 319) {
+                    VTSS_I("Engine Id:%d, EGR: Primary OOS Recovery, ENCAP is ETH-IP-PTP,  UDP Sport_Val: 0x%04x ", eng_id, sport_val);
+                } else {
+                    pr("ERROR in Config: Engine Id:%d, EGR: Primary OOS Recovery, ENCAP is ETH-IP-PTP, UDP Sport_Val != 0x013F Sport_Val: 0x%04x \n", eng_id, sport_val);
+                    VTSS_E("ERROR in Config: Engine Id:%d, EGR: Primary OOS Recovery, ENCAP is ETH-IP-PTP, UDP Sport_Val != 0x013F Sport_Val: 0x%04x ", eng_id, sport_val);
+                    VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                    return VTSS_RC_ERROR;
+                }
+            } else {
+                pr("Engine Id:%d, EGR: Primary OOS Recovery, ENCAP is ETH-IP-PTP,  UDP Sport_MASK: 0x%04x \n", eng_id, sport_mask);
+                VTSS_I("Engine Id:%d, EGR: Primary OOS Recovery, ENCAP is ETH-IP-PTP,  UDP Sport_MASK: 0x%04x ", eng_id, sport_mask);
+            }
+
+            /* Check UDP Dest Port, For PTP Setup, It is required to be 319 or 0x013F */
+            if ((dport_val & dport_mask) != 319) {
+                pr("ERROR in Config: Engine Id:%d, EGR: Primary OOS Recovery, ENCAP is ETH-IP-PTP, UDP Dport_Val != 0x013F Dport_Val: 0x%04x \n", eng_id, dport_val);
+                VTSS_E("ERROR in Config: Engine Id:%d, EGR: Primary OOS Recovery, ENCAP is ETH-IP-PTP, UDP Dport_Val != 0x013F Dport_Val: 0x%04x ", eng_id, dport_val);
                 VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
                 return VTSS_RC_ERROR;
             }
@@ -4281,13 +4704,14 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
             VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
             return VTSS_RC_ERROR;
         }
+
         break;
 
     case VTSS_PHY_TS_PTP_ENGINE_ID_1:
         if ((value32 & VTSS_TS_ENG1_ENABLED) == VTSS_TS_ENG1_ENABLED) {
             pr("Engine Id:%d, Designated for Primary OOS Recovery (eng_recov) is Enabled! \n", eng_id);
             if ((rc = VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_ANA_BLK_ID_ING_1,
-                                   VTSS_ANA_ETH1_NXT_PROTOCOL_ETH1_ETYPE_MATCH, &value32)) != VTSS_RC_OK) {
+                                           VTSS_ANA_ETH1_NXT_PROTOCOL_ETH1_ETYPE_MATCH, &value32)) != VTSS_RC_OK) {
                 pr("CSR Access failed: Initial Reading VTSS_PTP_IP_1588_TOP_CFG_STAT_ANALYZER_MODE \n");
                 VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
                 return VTSS_RC_ERROR;
@@ -4303,6 +4727,105 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
                 return VTSS_RC_ERROR;
             }
 
+            /* Ingress - If UDP Sport_MASK is Non-Zero, We have to check the Value, it should be 319 or 0x013F  */
+            if ((rc = VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_ANA_BLK_ID_ING_1,
+                                           VTSS_ANA_IP1_NXT_PROTOCOL_IP1_PROT_MATCH_2_UPPER,
+                                           &value32)) != VTSS_RC_OK) {
+                pr("CSR Access failed: Initial Reading VTSS_ANA_IP1_NXT_PROTOCOL_IP1_PROT_MATCH_2_UPPER \n");
+                VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                return VTSS_RC_ERROR;
+            }
+            sport_val = (value32 & 0xffff0000) >> 16;
+            dport_val = (value32 & 0x0000ffff);
+
+            if ((rc = VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_ANA_BLK_ID_ING_1,
+                                           VTSS_ANA_IP1_NXT_PROTOCOL_IP1_PROT_MASK_2_UPPER,
+                                           &value32)) != VTSS_RC_OK) {
+                pr("CSR Access failed: Initial Reading VTSS_ANA_IP1_NXT_PROTOCOL_IP1_PROT_MASK_2_UPPER \n");
+                VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                return VTSS_RC_ERROR;
+            }
+            sport_mask = (value32 & 0xffff0000) >> 16;
+            dport_mask = (value32 & 0x0000ffff);
+
+            VTSS_I("Engine Id:%d, INGRESS: OOS Recovery, ETH-IP-PTP UDP Sport_M: 0x%04x, Sport_Val:0x%04x, Dport_M:0x%04x, Dport_Val:0x%04x",
+                   eng_id, sport_mask, sport_val, dport_mask, dport_val);
+            pr("Engine Id:%d, INGRESS: OOS Recovery, ETH-IP-PTP UDP Sport_M: 0x%04x, Sport_Val:0x%04x, Dport_M:0x%04x, Dport_Val:0x%04x\n",
+               eng_id, sport_mask, sport_val, dport_mask, dport_val);
+
+            /* If the UDP Sport_Mask is set, the only value that can be used for OOS Recovery to work is 319 or 0x013F */
+            if ((sport_mask)) {
+                /* Must check for UDP Value, but also Apply the Mask to ensure Both are correct */
+                if ((sport_val & sport_mask) == 319) {
+                    VTSS_I("Engine Id:%d, ING: Primary OOS Recovery, ENCAP is ETH-IP-PTP,  UDP Sport_Val: 0x%04x ", eng_id, sport_val);
+                } else {
+                    pr("ERROR in Config: Engine Id:%d, ING: Primary OOS Recovery, ENCAP is ETH-IP-PTP, UDP Sport_Val != 0x013F Sport_Val: 0x%04x \n", eng_id, sport_val);
+                    VTSS_E("ERROR in Config: Engine Id:%d, ING: Primary OOS Recovery, ENCAP is ETH-IP-PTP, UDP Sport_Val != 0x013F Sport_Val: 0x%04x ", eng_id, sport_val);
+                    VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                    return VTSS_RC_ERROR;
+                }
+            } else {
+                pr("Engine Id:%d, ING: Primary OOS Recovery, ENCAP is ETH-IP-PTP,  UDP Sport_MASK: 0x%04x \n", eng_id, sport_mask);
+                VTSS_I("Engine Id:%d, ING: Primary OOS Recovery, ENCAP is ETH-IP-PTP,  UDP Sport_MASK: 0x%04x ", eng_id, sport_mask);
+            }
+
+            /* Check UDP Dest Port, For PTP Setup, It is required to be 319 or 0x013F */
+            if ((dport_val & dport_mask) != 319) {
+                pr("ERROR in Config: Engine Id:%d, ING: Primary OOS Recovery, ENCAP is ETH-IP-PTP, UDP Dport_Val != 0x013F Dport_Val: 0x%04x \n", eng_id, dport_val);
+                VTSS_E("ERROR in Config: Engine Id:%d, ING: Primary OOS Recovery, ENCAP is ETH-IP-PTP, UDP Dport_Val != 0x013F Dport_Val: 0x%04x ", eng_id, dport_val);
+                VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                return VTSS_RC_ERROR;
+            }
+
+            /* Egress - If UDP Sport_MASK is Non-Zero, We have to check the Value, it should be 319 or 0x013f  */
+            if ((rc = VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_ANA_BLK_ID_EGR_1,
+                                           VTSS_ANA_IP1_NXT_PROTOCOL_IP1_PROT_MATCH_2_UPPER,
+                                           &value32)) != VTSS_RC_OK) {
+                pr("CSR Access failed: Initial Reading VTSS_ANA_IP1_NXT_PROTOCOL_IP1_PROT_MATCH_2_UPPER \n");
+                VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                return VTSS_RC_ERROR;
+            }
+            sport_val = (value32 & 0xffff0000) >> 16;
+            dport_val = (value32 & 0x0000ffff);
+
+            if ((rc = VTSS_PHY_TS_READ_CSR(port_no, VTSS_PHY_TS_ANA_BLK_ID_EGR_1,
+                                           VTSS_ANA_IP1_NXT_PROTOCOL_IP1_PROT_MASK_2_UPPER,
+                                           &value32)) != VTSS_RC_OK) {
+                pr("CSR Access failed: Initial Reading VTSS_ANA_IP1_NXT_PROTOCOL_IP1_PROT_MASK_2_UPPER \n");
+                VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                return VTSS_RC_ERROR;
+            }
+            sport_mask = (value32 & 0xffff0000) >> 16;
+            dport_mask = (value32 & 0x0000ffff);
+
+            VTSS_I("Engine Id:%d, EGRESS: OOS Recovery, ETH-IP-PTP UDP Sport_M: 0x%04x, Sport_Val:0x%04x, Dport_M:0x%04x, Dport_Val:0x%04x",
+                   eng_id, sport_mask, sport_val, dport_mask, dport_val);
+            pr("Engine Id:%d, EGRESS: OOS Recovery, ETH-IP-PTP UDP Sport_M: 0x%04x, Sport_Val:0x%04x, Dport_M:0x%04x, Dport_Val:0x%04x\n",
+               eng_id, sport_mask, sport_val, dport_mask, dport_val);
+
+            /* If the UDP Sport_Mask is set, the only value that can be used for OOS Recovery to work is 319 or 0x013F */
+            if ((sport_mask)) {
+                /* Must check for UDP Value, but also Apply the Mask to ensure Both are correct */
+                if ((sport_val & sport_mask) == 319) {
+                    VTSS_I("Engine Id:%d, EGR: Primary OOS Recovery, ENCAP is ETH-IP-PTP,  UDP Sport_Val: 0x%04x ", eng_id, sport_val);
+                } else {
+                    pr("ERROR in Config: Engine Id:%d, EGR: Primary OOS Recovery, ENCAP is ETH-IP-PTP, UDP Sport_Val != 0x013F Sport_Val: 0x%04x \n", eng_id, sport_val);
+                    VTSS_E("ERROR in Config: Engine Id:%d, EGR: Primary OOS Recovery, ENCAP is ETH-IP-PTP, UDP Sport_Val != 0x013F Sport_Val: 0x%04x ", eng_id, sport_val);
+                    VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                    return VTSS_RC_ERROR;
+                }
+            } else {
+                pr("Engine Id:%d, EGR: Primary OOS Recovery, ENCAP is ETH-IP-PTP,  UDP Sport_MASK: 0x%04x \n", eng_id, sport_mask);
+                VTSS_I("Engine Id:%d, EGR: Primary OOS Recovery, ENCAP is ETH-IP-PTP,  UDP Sport_MASK: 0x%04x ", eng_id, sport_mask);
+            }
+
+            /* Check UDP Dest Port, For PTP Setup, It is required to be 319 or 0x013F */
+            if ((dport_val & dport_mask) != 319) {
+                pr("ERROR in Config: Engine Id:%d, EGR: Primary OOS Recovery, ENCAP is ETH-IP-PTP, UDP Dport_Val != 0x013F Dport_Val: 0x%04x \n", eng_id, dport_val);
+                VTSS_E("ERROR in Config: Engine Id:%d, EGR: Primary OOS Recovery, ENCAP is ETH-IP-PTP, UDP Dport_Val != 0x013F Dport_Val: 0x%04x ", eng_id, dport_val);
+                VTSS_PHY_TS_SPI_UNPAUSE_PRIV(port_no);
+                return VTSS_RC_ERROR;
+            }
         } else {
             pr("INVALID CONFIG: Engine Id:%d, Engine designated for Primary OOS Recovery (eng_recov) NOT Enabled! \n", eng_id);
             VTSS_E("INVALID CONFIG: Engine Id:%d, Engine designated for Primary OOS Recovery (eng_recov) NOT Enabled! ", eng_id);
@@ -4320,7 +4843,7 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
 
     value32 = recov->ana_mode;
     /* Check if Engine-2A or Engine-2B are enabled or not - INFO Only */
-    switch(eng_minE) {
+    switch (eng_minE) {
     case VTSS_PHY_TS_OAM_ENGINE_ID_2A:
     case VTSS_PHY_TS_OAM_ENGINE_ID_2B:
         if ((value32 & VTSS_TS_ENG2_ENABLED) == VTSS_TS_ENG2_ENABLED) {
@@ -4411,10 +4934,20 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
     VTSS_I ("Info: Entry - Just-Before-Enable-Port-BYPASS Mode.   Link Status: 1st Read:Reg01: 0x%x;   2nd Read:Reg01: 0x%x    port_no: %d, OOS_Cnt:%d ",
             counter1, counter2, port_no, oos_counter[port_no]);
 
+
     /* ********************************************************************************* */
     /* Failures from this point onward require special recovery                          */
     /* ********************************************************************************* */
     recov->recovery_required = TRUE;
+    vtss_state->phy_ts_port_conf[port_no].oos_recovery_active = TRUE;
+
+    /* Set HW Bit to indicate OOS has been enabled - Saved across Warm-Start Cycles  */
+    if ((rc = PHY_WR_MASKED_PAGE(vtss_state, port_no, VTSS_PHY_LED_BEHAVIOR, 0x2000, 0x2000)) != VTSS_RC_OK) {
+        VTSS_E("TESLA_OOS: Failed to SET VTSS_F_PHY_LED_BEHAVIOR_OOS_RECOVERY_ENABLE, port-no: %d\n", port_no);
+    }
+
+    /* *********************************************************************************** */
+    /* *********************************************************************************** */
 
 #if 1
     /* Set bypass mode */
@@ -4471,8 +5004,8 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
     /* Start: port reset for 100FX TODO: Need to add any delay after reset or check for reset bit cleared??*/
     recov->port_reset_conf = vtss_state->phy_state[port_no].reset;
     recov->port_reset_conf_sav = TRUE;
-    VTSS_I("Entry PHY_Reset_Media_if mode: 0x%x,  Media_Op_Mode: 0x%x, Sav_Media_if: 0x%x, Port_no: %d\n", 
-          vtss_state->phy_state[port_no].reset.media_if, media_operating_mode, recov->port_reset_conf.media_if, port_no);
+    VTSS_I("Entry PHY_Reset_Media_if mode: 0x%x,  Media_Op_Mode: 0x%x, Sav_Media_if: 0x%x, Port_no: %d\n",
+           vtss_state->phy_state[port_no].reset.media_if, media_operating_mode, recov->port_reset_conf.media_if, port_no);
 
     /* Must Check port Media Operating Mode - In the PHY Instance - Must be in 1000Base-X Mode */
     /* Must Check port Media Operating Mode - In the HW also - Must be in 1000Base-X */
@@ -4483,7 +5016,7 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
         u16                   micro_cmd_100fx = 0; // Use to signal to micro program if the fiber is 100FX (Bit 4). Default is 1000BASE-x
 
         VTSS_I("FIFO-SYNC: Current Media i/f: 0x%x  HW_media_operating_mode:0x%x chg to VTSS_PHY_MEDIA_IF_FI_1000BX(0x%x)\n",
-                vtss_state->phy_state[port_no].reset.media_if, media_operating_mode, VTSS_PHY_MEDIA_IF_FI_1000BX);
+               vtss_state->phy_state[port_no].reset.media_if, media_operating_mode, VTSS_PHY_MEDIA_IF_FI_1000BX);
         // Setup media in micro program. Bit 8-11 is bit for the corresponding port (See TN1080)
         miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_GPIO);
         miim_write_func(vtss_state, port_no, 0x12, (0x80C1 | ((1 << (channel_id)) << 8) | micro_cmd_100fx));
@@ -4499,9 +5032,9 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
         value |= VTSS_F_PHY_EXTENDED_PHY_CONTROL_MEDIA_OPERATING_MODE(0x2); // VTSS_PHY_MEDIA_IF_FI_1000BX
         miim_write_func(vtss_state, port_no, 0x17, value);      // Extended PHY Control, Reg23
         /* Update the Media i/f */
-        vtss_state->phy_state[port_no].reset.media_if = VTSS_PHY_MEDIA_IF_FI_1000BX; // Overwrite the reset config to match the OOS Patch for conf_set code
+//        vtss_state->phy_state[port_no].reset.media_if = VTSS_PHY_MEDIA_IF_FI_1000BX; // Overwrite the reset config to match the OOS Patch for conf_set code
 
-        /*  Reg0: Bits 15,14,6 Set: SW_Reset; NE_Lpbk ENA; Forced_Speed-1000m */ 
+        /*  Reg0: Bits 15,14,6 Set: SW_Reset; NE_Lpbk ENA; Forced_Speed-1000m */
         reg = VTSS_F_PHY_MODE_CONTROL_SW_RESET | VTSS_F_PHY_MODE_CONTROL_LOOP | (1 << 6);
         VTSS_I("Soft resetting Tesla port:%d, Placing Media in Fiber-1000BX; FORCED-1000m mode; Writing Reg23:0x%04x; Reg0:0x%x\n", port_no, value, reg);
         PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_MODE_CONTROL, reg);  // Tesla PHY Only - Writing 0xc040
@@ -4530,7 +5063,9 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
         VTSS_E("ERROR during FIFO-SYNC Config Update!!");
         return VTSS_RC_ERROR;
     }
-    VTSS_I("Config Updated");
+    VTSS_I("PHY HW Config Updated - Forced");
+    vtss_state->phy_state[port_no].setup = recov->port_conf;
+    VTSS_I("PHY_INST Config Reverted - Not applying to HW at this time");
 
     /* MAC ISOLATE */
     /* NOTE: This must occur AFTER the switch from 100FX because the Media chg does a SW Reset, which clears the isolate bit! */
@@ -4802,6 +5337,22 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
                             rc = VTSS_RC_ERROR;
                             break;
                         }
+#ifdef TESLA_FIFO_SYNC_OOS_EARLY_EXIT_ERROR_TESTING
+                        /************************************************************** */
+                        /************************************************************** */
+                        tesla_fifo_sync_counter++;
+                        if ((tesla_fifo_sync_counter > 0) && 
+                            (tesla_fifo_sync_counter % TESLA_FIFO_SYNC_OOS_EARLY_EXIT_COUNT) == 0) {
+                            VTSS_E("TESLA_FIFO_SYNC_OOS_EARLY_EXIT_ERROR_TESTING:  Executing EARLY_EXIT fail port_no %d,  tesla_fifo_sync_counter: %d",
+                                port_no, tesla_fifo_sync_counter);
+                            printf("TESLA_FIFO_SYNC_OOS_EARLY_EXIT_ERROR_TESTING:  Executing EARLY_EXIT fail port_no %d,  tesla_fifo_sync_counter: %d\n",
+                                port_no, tesla_fifo_sync_counter);
+                            return(VTSS_RC_ERROR);  // Error Testing
+                        }
+                        /************************************************************** */
+                        /************************************************************** */
+#endif
+
 
                         if (ing_reset) {
                             if (counter1 < 1) {
@@ -4843,7 +5394,7 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
                 printf("TS FIFO - OUT-OF-SYNC Detected !!!!! HW_RESET_REQUIRED !!!  port-no: %d\n", port_no);
 #endif
             } else {
-#ifdef VTSS_TS_FIFO_SYNC_MINIMIZE_OUTPUT  
+#ifdef VTSS_TS_FIFO_SYNC_MINIMIZE_OUTPUT
                 printf("TS FIFO - IN-SYNC Detected !!!!! INGRESS_AND_EGRESS_RECOVERY_CONFIRMED !!!  port-no: %d\n", port_no);
 #else
                 pr("TS FIFO - IN-SYNC Detected !!!!! INGRESS_AND_EGRESS_RECOVERY_CONFIRMED !!!  port-no: %d\n", port_no);
@@ -4975,7 +5526,7 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
     VTSS_MSLEEP(1);
 
     VTSS_MSLEEP(1);
- 
+
     if (recov->port_reset_conf_sav) {
         vtss_state->phy_state[port_no].reset = recov->port_reset_conf;  // Restore the port_reset config to what it was prior to entry.
         VTSS_I("FIFO_SYNC: Exit PHY_Reset_Media_if mode: 0x%x,  Port_no: %d\n", vtss_state->phy_state[port_no].reset.media_if, port_no);
@@ -4983,7 +5534,7 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
 
     /* Start of Restoring Media i/f to port */
     if (vtss_state->phy_state[port_no].reset.media_if != VTSS_PHY_MEDIA_IF_FI_1000BX) {
-        if((rc = vtss_phy_ts_tesla_fifo_sync_port_reset_priv(vtss_state, port_no, pr, recov)) != VTSS_RC_OK) {
+        if ((rc = vtss_phy_ts_tesla_fifo_sync_port_reset_priv(vtss_state, port_no, pr, recov)) != VTSS_RC_OK) {
             VTSS_E("TS FIFO Sync: Failure to Revert PHY Port MEDIA_IF configuration, port-no: %d\n", port_no);
         }
     }
@@ -5047,6 +5598,13 @@ static vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state_t *vtss_state,
     }
 
     VTSS_MSLEEP(1);
+
+    /* Clear HW Bit to indicate OOS has been disabled - Saved across Warm-Start Cycles  */
+    VTSS_I("TESLA_OOS: CLEARING - VTSS_F_PHY_LED_BEHAVIOR_OOS_RECOVERY_ENABLE, port-no: %d\n", port_no);
+    if ((rc = PHY_WR_MASKED_PAGE(vtss_state, port_no, VTSS_PHY_LED_BEHAVIOR, 0x0000, 0x2000)) != VTSS_RC_OK) {
+        VTSS_E("TESLA_OOS: Failed to CLEAR - VTSS_F_PHY_LED_BEHAVIOR_OOS_RECOVERY_ENABLE, port-no: %d\n", port_no);
+    }
+    vtss_state->phy_ts_port_conf[port_no].oos_recovery_active = FALSE;
 
     value = 0;
     VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_PHY_CONTROL, &value));
@@ -5198,7 +5756,7 @@ static vtss_rc vtss_phy_ts_tesla_error_recover_priv(vtss_state_t                
     VTSS_I("Disable ALL Loopbacks");
 
     pr("FIFO_SYNC: vtss_phy_ts_tesla_error_recover_priv - ALL Loopbacks Disabled, EPG Disabled, Port_no: %d\n", port_no);
- 
+
     if (recov->port_reset_conf_sav) {
         vtss_state->phy_state[port_no].reset = recov->port_reset_conf;  // Restore the port_reset config to what it was prior to entry.
         VTSS_I("FIFO_SYNC: Error_Recover_Exit PHY_Reset_Media_if mode: 0x%x,  Port_no: %d\n", vtss_state->phy_state[port_no].reset.media_if, port_no);
@@ -5206,7 +5764,7 @@ static vtss_rc vtss_phy_ts_tesla_error_recover_priv(vtss_state_t                
 
     /* Start of Restoring Media i/f to port */
     if (vtss_state->phy_state[port_no].reset.media_if != VTSS_PHY_MEDIA_IF_FI_1000BX) {
-        if((rc = vtss_phy_ts_tesla_fifo_sync_port_reset_priv(vtss_state, port_no, pr, recov)) != VTSS_RC_OK) {
+        if ((rc = vtss_phy_ts_tesla_fifo_sync_port_reset_priv(vtss_state, port_no, pr, recov)) != VTSS_RC_OK) {
             VTSS_E("TS FIFO Sync: Failure to Revert PHY Port MEDIA_IF configuration, port-no: %d\n", port_no);
         }
     }
@@ -5223,7 +5781,7 @@ static vtss_rc vtss_phy_ts_tesla_error_recover_priv(vtss_state_t                
 
     /* Only Re-apply Port Conf if it was saved previously */
     if (recov->port_conf_sav) {
-    VTSS_I("TS FIFO Sync: Revert PHY Port configuration, port-no: %d\n", port_no);
+        VTSS_I("TS FIFO Sync: Revert PHY Port configuration, port-no: %d\n", port_no);
         vtss_state->phy_state[port_no].setup = recov->port_conf;
     }
     /* The config should be applied before the link comes up, therefore, there should not be a need to re-aneg. */
@@ -5278,13 +5836,17 @@ static vtss_rc vtss_phy_ts_tesla_error_recover_priv(vtss_state_t                
     VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_PHY_CONTROL, &value));
     pr("FIFO_SYNC_ABNORMAL_Exit: Media i/f Config: PHYInst:0x%x, Reg23:0x%04x OOS Patch port-no: %d \n", vtss_state->phy_state[port_no].reset.media_if, ((value >> 8) & 0x7), port_no);
 
+    vtss_state->phy_ts_port_conf[port_no].oos_recovery_active = FALSE;
+
     pr("FIFO_SYNC: vtss_phy_ts_tesla_error_recover_priv Exit, Port_no: %d\n", port_no);
     /* Switch over back from 8051 middle man approach */
 
     return rc;
 }
 
-#define VTSS_OOS_PATCH_MAX_RETRY       (10)
+#ifdef TESLA_FIFO_SYNC_OOS_RE_CHECK_FIFO
+
+#define VTSS_OOS_PATCH_MAX_RETRY       (2)
 static vtss_rc vtss_phy_ts_tesla_tsp_recheck_fifo(vtss_state_t                 *vtss_state,
                                                   const vtss_port_no_t             port_no,
                                                   const vtss_debug_printf_t        pr,
@@ -5371,6 +5933,8 @@ static vtss_rc vtss_phy_ts_tesla_tsp_recheck_fifo(vtss_state_t                 *
 
 }
 
+#endif /* TESLA_FIFO_SYNC_OOS_RE_CHECK_FIFO */
+
 vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_private(vtss_state_t                    *vtss_state,
                                                 const vtss_port_no_t            port_no,
                                                 const vtss_debug_printf_t       pr,
@@ -5393,22 +5957,30 @@ vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_private(vtss_state_t                    
     gettimeofday(&tv, NULL);
     pr("Entry:Time Sec %ld, Usec  %ld\n", tv.tv_sec, tv.tv_usec);
 #endif
-        /* turn on enable flag for "middleman" accesses throughout fifo_sync API */
-        vtss_state->rd_ts_fifo = TRUE;
-        miim_read_func = vtss_state->init_conf.miim_read;
-        miim_write_func = vtss_state->init_conf.miim_write;
+    /* turn on enable flag for "middleman" accesses throughout fifo_sync API */
+    vtss_state->rd_ts_fifo = TRUE;
+    miim_read_func = vtss_state->init_conf.miim_read;
+    miim_write_func = vtss_state->init_conf.miim_write;
 
-        //Save EPG Reg 29E1
-        miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_EXTENDED);
-        miim_read_func(vtss_state, port_no, 0x1d, &value);
-        miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_STANDARD);
+    //Save EPG Reg 29E1
+    miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_EXTENDED);
+    miim_read_func(vtss_state, port_no, 0x1d, &value);
+    miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_STANDARD);
 
-        if ((vtss_phy_ts_algo_execute_check(vtss_state, port_no)) == FALSE) {
-            VTSS_I("PTP is not configured on the port exiting quietly\n");
-            return VTSS_RC_OK;
+    if ((vtss_phy_ts_algo_execute_check(vtss_state, port_no)) == FALSE) {
+        VTSS_I("PTP is not configured on the port exiting quietly\n");
+        return VTSS_RC_OK;
+    }
+
+    if ((rc = vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state, port_no, pr, fifo_conf, OOS, &recov)) != VTSS_RC_OK) {
+#ifdef TESLA_FIFO_SYNC_OOS_WS_ERROR_TESTING
+        if ((tesla_fifo_sync_counter > 0) && 
+            (tesla_fifo_sync_counter % TESLA_FIFO_SYNC_OOS_EARLY_EXIT_COUNT) == 0) {
+            VTSS_E("TESLA_FIFO_SYNC_OOS_WS_ERROR_TESTING: TESLA TSP_FIFO SYNC Skipping Early-Exit-Error-Recovery! port_no: %d\n", port_no);
         }
-
-        if ((rc = vtss_phy_ts_tesla_tsp_fifo_sync_priv(vtss_state, port_no, pr, fifo_conf, OOS, &recov)) != VTSS_RC_OK) {
+        else 
+#endif
+        {
             vtss_rc   rc1 = 0;
             VTSS_E("TESLA TSP_FIFO SYNC Failed. port_no: %d\n", port_no);
             /* In the event there was a failure, Ensure EPG and Loopbacks are Disabled */
@@ -5421,20 +5993,24 @@ vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_private(vtss_state_t                    
                 VTSS_I("TESLA TSP_FIFO SYNC Failed AND RECONFIG of PHY Successful. port_no: %d\n", port_no);
             }
         }
+    }
         /* Only do a Re-Check if there was no ERROR Returned */
-        VTSS_I("TSP_FIFO_SYNC_RE_CHECKING Port_no: %d, Previous OOS State: 0x%x ", port_no, *OOS);
-        if (rc == VTSS_RC_OK) {
-            if ((rc = vtss_phy_ts_tesla_tsp_recheck_fifo(vtss_state, port_no, pr, fifo_conf, OOS, &recov)) != VTSS_RC_OK) {
+#ifdef TESLA_FIFO_SYNC_OOS_RE_CHECK_FIFO
+    /* Only do a Re-Check if there was no ERROR Returned */
+    VTSS_I("TSP_FIFO_SYNC_RE_CHECKING Port_no: %d, Previous OOS State: 0x%x ", port_no, *OOS);
+    if (rc == VTSS_RC_OK) {
+        if ((rc = vtss_phy_ts_tesla_tsp_recheck_fifo(vtss_state, port_no, pr, fifo_conf, OOS, &recov)) != VTSS_RC_OK) {
             VTSS_E("TESLA TSP_FIFO SYNC Failed. port_no: %d", port_no);
         }
-        }
+    }
+#endif
 
-        //Restore EPG reg 29E1
-        miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_EXTENDED);
-        miim_write_func(vtss_state, port_no, 0x1d, value);
-        miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_STANDARD);
-        /* Switch over back from 8051 middle man approach */
-        vtss_state->rd_ts_fifo = FALSE;
+    //Restore EPG reg 29E1
+    miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_EXTENDED);
+    miim_write_func(vtss_state, port_no, 0x1d, value);
+    miim_write_func(vtss_state, port_no, 0x1f, VTSS_PHY_PAGE_STANDARD);
+    /* Switch over back from 8051 middle man approach */
+    vtss_state->rd_ts_fifo = FALSE;
 
 #ifdef VTSS_FIFO_SYNC_DEBUG
     gettimeofday(&tv, NULL);
@@ -5443,6 +6019,8 @@ vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_private(vtss_state_t                    
     return rc;
 
 }
+
+
 #else
 vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_private(const vtss_state_t   *vtss_state,
                                                 const vtss_port_no_t port_no,
@@ -5454,6 +6032,9 @@ vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_private(const vtss_state_t   *vtss_state
     return rc;
 }
 #endif //TESLA_ING_TS_ERRFIX
+
+/* ******************************************************************************************** */
+
 // Function that returns the chip type/id for a given port.
 // In     : port_no  - Internal port (starting from 0)
 // In/Out : phy_id - Pointer to phy_id to be returned.
@@ -5711,12 +6292,11 @@ static vtss_rc vtss_phy_10g_oos_core_patch( vtss_state_t *vtss_state,
 
     //TeslaCsrWrite $port $proc_id 0x02 0x4;  #Mode ctrl, enable pkt mode
 #if defined(VTSS_FEATURE_MACSEC)
-    if(!macsec_enable)
+    if (!macsec_enable)
 #endif
     {
         VTSS_RC(vtss_phy_ts_en_pkt_mode(vtss_state, port_no, TRUE));
     }
-
     //TeslaCsrWrite $port $proc_id 0x00 0x46;#Enable 1588 Bypass
     vtss_phy_ts_bypass_set(vtss_state, port_no, TRUE, TRUE);
 
@@ -5727,7 +6307,7 @@ static vtss_rc vtss_phy_10g_oos_core_patch( vtss_state_t *vtss_state,
     VTSS_I("Current Page Value Port_no %u Value 0x%x\n", port_no, reg);
 
     VTSS_RC(PHY_WR_MASKED_PAGE(vtss_state, port_no, VTSS_PHY_1588_PPS_0_MUX_CTRL , VTSS_F_PHY_1588_PPS_0_MUX_CTRL_1588_SOFT_RESET,
-                                    VTSS_F_PHY_1588_PPS_0_MUX_CTRL_1588_SOFT_RESET));
+                               VTSS_F_PHY_1588_PPS_0_MUX_CTRL_1588_SOFT_RESET));
     VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_1588_PPS_0_MUX_CTRL , &reg));
 
     VTSS_I("VTSS_PHY_1588_PPS_0_MUX_CTRL Port_no %u Value 0x%x\n", port_no, reg);
@@ -5771,7 +6351,7 @@ static vtss_rc vtss_phy_10g_oos_core_patch( vtss_state_t *vtss_state,
     VTSS_I("Current Page Value Port_no %u Value 0x%x\n", port_no, reg);
 
     VTSS_RC(PHY_WR_MASKED_PAGE(vtss_state, port_no, VTSS_PHY_1588_PPS_0_MUX_CTRL , VTSS_F_PHY_1588_PPS_0_MUX_CTRL_1588_SOFT_RESET,
-                                    VTSS_F_PHY_1588_PPS_0_MUX_CTRL_1588_SOFT_RESET));
+                               VTSS_F_PHY_1588_PPS_0_MUX_CTRL_1588_SOFT_RESET));
     VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_1588_PPS_0_MUX_CTRL , &reg));
 
     VTSS_I("VTSS_PHY_1588_PPS_0_MUX_CTRL Port_no %u Value 0x%x\n", port_no, reg);
@@ -5788,7 +6368,7 @@ static vtss_rc vtss_phy_10g_oos_core_patch( vtss_state_t *vtss_state,
 
     //TeslaCsrWrite $port $proc_id 0x02 0x0;  #Mode ctrl pkt mode disable
 #if defined(VTSS_FEATURE_MACSEC)
-    if(!macsec_enable)
+    if (!macsec_enable)
 #endif
     {
         VTSS_RC(vtss_phy_ts_en_pkt_mode(vtss_state, port_no, FALSE));
@@ -5895,7 +6475,7 @@ vtss_rc vtss_phy_ts_isolate_phy(vtss_state_t *vtss_state,
         return VTSS_RC_OK;
     }
 
-    if(!(phy_id.revision >= 1)){
+    if (!(phy_id.revision >= 1)) {
         VTSS_I("Viper Rev A, OOS algorithm should not be executed\n");
         return VTSS_RC_OK;
     }
@@ -5926,8 +6506,8 @@ vtss_rc vtss_phy_ts_isolate_phy(vtss_state_t *vtss_state,
 
 }
 vtss_rc vtss_phy_1588_oos_mitigation_isolate_phy(vtss_state_t *vtss_state,
-                                                        const vtss_port_no_t port_no,
-                                                        BOOL copper)
+                                                 const vtss_port_no_t port_no,
+                                                 BOOL copper)
 {
     vtss_rc rc = VTSS_RC_OK;
 
@@ -5950,28 +6530,28 @@ vtss_rc vtss_phy_1588_oos_mitigation_isolate_phy(vtss_state_t *vtss_state,
     VTSS_I("3.Configure mac_isolate_tx and wait for 1m (to prevent media side traffic) \n");
     rc = token_reg_write_func(vtss_state, port_no, 0x0c80, 0x0085, 0x0085, 0x1000, 0x1000);
 
-    if(copper) {
+    if (copper) {
         //MiiWrite $port 9 0x1F00;#Force Master
         VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_1000BASE_T_CONTROL, 0x1F00));
 
         //MiiWriteBits $port 0 9 9 1;#Restart ANEG
         VTSS_RC(PHY_WR_MASKED_PAGE(vtss_state, port_no, VTSS_PHY_MODE_CONTROL,
-                    VTSS_F_PHY_MODE_CONTROL_RESTART_AUTO_NEG,
-                    VTSS_F_PHY_MODE_CONTROL_RESTART_AUTO_NEG));
+                                   VTSS_F_PHY_MODE_CONTROL_RESTART_AUTO_NEG,
+                                   VTSS_F_PHY_MODE_CONTROL_RESTART_AUTO_NEG));
 
         //MiiWrite $port 0 0x4140; #Forced 1G mode and Near-End loopback
         VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_MODE_CONTROL, 0x4140));
     } else {
         //set Near-end loopback
         VTSS_RC(PHY_WR_MASKED_PAGE(vtss_state, port_no, VTSS_PHY_MODE_CONTROL,
-                    VTSS_F_PHY_MODE_CONTROL_LOOP,
-                    VTSS_F_PHY_MODE_CONTROL_LOOP));
+                                   VTSS_F_PHY_MODE_CONTROL_LOOP,
+                                   VTSS_F_PHY_MODE_CONTROL_LOOP));
     }
 
     return VTSS_RC_OK;
 }
 static vtss_rc  vtss_phy_1588_oos_mitigation_media_interface_link_status(vtss_state_t *vtss_state,
-                                                                 const vtss_port_no_t port_no)
+                                                                         const vtss_port_no_t port_no)
 {
     u16 reg;
     u32 count;
@@ -5986,8 +6566,7 @@ static vtss_rc  vtss_phy_1588_oos_mitigation_media_interface_link_status(vtss_st
 
     count = 0;
 
-    while(!(reg & VTSS_F_PHY_MEDIA_SERDES_PCS_STATUS_MEDIA_LINK_STATUS))
-    {
+    while (!(reg & VTSS_F_PHY_MEDIA_SERDES_PCS_STATUS_MEDIA_LINK_STATUS)) {
         count++;
 
         if (count >= 10) {
@@ -6092,7 +6671,7 @@ static vtss_rc vtss_phy_1588_oos_mitigation_soft_reset_pop_fifo(vtss_state_t *vt
     VTSS_I("Current Page Value Port_no %u Value 0x%x\n", port_no, reg);
 
     VTSS_RC(PHY_WR_MASKED_PAGE(vtss_state, port_no, VTSS_PHY_1588_PPS_0_MUX_CTRL , VTSS_F_PHY_1588_PPS_0_MUX_CTRL_1588_SOFT_RESET,
-                VTSS_F_PHY_1588_PPS_0_MUX_CTRL_1588_SOFT_RESET));
+                               VTSS_F_PHY_1588_PPS_0_MUX_CTRL_1588_SOFT_RESET));
     VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_1588_PPS_0_MUX_CTRL , &reg));
 
     VTSS_I("VTSS_PHY_1588_PPS_0_MUX_CTRL Port_no %u Value 0x%x\n", port_no, reg);
@@ -6112,9 +6691,9 @@ static vtss_rc vtss_phy_1588_oos_mitigation_soft_reset_pop_fifo(vtss_state_t *vt
     //TeslaCsrWrite $port $proc_id 0x9F 0x68;
     //TeslaCsrWrite $port $proc_id 0xC0 0x68
     VTSS_RC(vtss_phy_ts_sw_pop_fifo(vtss_state, port_no, TRUE));
-    //    set d2 [TeslaCsrRead $port $proc_id 0x2D]
-    //    set d4 [TeslaCsrRead $port $proc_id 0x4D]
-    //    TeslaCsrWrite $port $proc_id 0x2D $d2;
+    // set d2 [TeslaCsrRead $port $proc_id 0x2D]
+    // set d4 [TeslaCsrRead $port $proc_id 0x4D]
+    // TeslaCsrWrite $port $proc_id 0x2D $d2;
     //     TeslaCsrWrite $port $proc_id 0x4D $d4
     VTSS_RC(vtss_phy_intr_status(vtss_state, port_no, &overflow_conf));
 
@@ -6138,7 +6717,7 @@ static vtss_rc vtss_phy_1588_oos_mitigation_epg_transmit_frames(vtss_state_t *vt
     VTSS_I("Value of register VTSS_PHY_CU_MEDIA_CRC_GOOD_COUNTER is 0x%x\n", reg);
 
     //ExtMiiWrite $port 29 0x8042;#Enable EPG
-    VTSS_I("9.Enable EPG. Just enable, don’t start it\n");
+    VTSS_I("9.Enable EPG. Just enable, don't start it\n");
     VTSS_RC(vtss_phy_page_ext(vtss_state, port_no));        // Switch to extended register-page 1
     VTSS_RC(vtss_phy_rd(vtss_state, port_no, 31, &reg));
     VTSS_I("Current Page Value Port_no %u Value 0x%x\n", port_no, reg);
@@ -6153,13 +6732,14 @@ static vtss_rc vtss_phy_1588_oos_mitigation_epg_transmit_frames(vtss_state_t *vt
     reg = reg | 0x4000;
     VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, EPG_CTRL_REG_1, reg));
 
-    if(copper){
+    if (copper) {
         count = 0;
         VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, EPG_CTRL_REG_1, &reg));
 
         while (reg & 0x4000) {
-            if(count >= 10)
+            if (count >= 10) {
                 VTSS_E("EPG taking way too long to transmit packets\n");
+            }
             VTSS_I("Waiting to transmit EPG frames\n");
             VTSS_MSLEEP(1);
             VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, EPG_CTRL_REG_1, &reg));
@@ -6181,7 +6761,7 @@ static vtss_rc vtss_phy_1588_oos_mitigation_epg_transmit_frames(vtss_state_t *vt
     //[Ext3MiiReadBits $port 28 13 0]
     VTSS_RC(vtss_phy_page_ext3(vtss_state, port_no));
     VTSS_RC(vtss_phy_rd(vtss_state, port_no, 28, &rec_cnt));
-    VTSS_I("Media-MAC SerDes Receive CRC Good Counter rec_cnt %u\n",rec_cnt);
+    VTSS_I("Media-MAC SerDes Receive CRC Good Counter rec_cnt %u\n", rec_cnt);
 
 
     return VTSS_RC_OK;
@@ -6213,7 +6793,7 @@ static vtss_rc vtss_phy_1588_oos_mitigation_execute_core_patch_execute(vtss_stat
         core_patch_cnt++;
 
         if (core_patch_cnt > 10) {
-            VTSS_E("Core patch executing way too many times, exiting\n");
+            VTSS_I("Core patch executing way too many times, exiting\n");
             break;
 
         }
@@ -6263,7 +6843,7 @@ static vtss_rc vtss_phy_1588_oos_mitigation_restore_setup(vtss_state_t *vtss_sta
     VTSS_I("16.Disable mac_isolate_rx and wait for 1ms\n");
     rc = token_reg_write_func(vtss_state, port_no, 0x0c80, 0x0005, 0x0045, 0x1000, 0x1000);
 
-    // TrWrite $port mac_isolate_tx -1 0
+    //TrWrite $port mac_isolate_tx -1 0
     VTSS_I("16.5.Disable mac_isolate_tx and wait for 1ms\n");
     rc = token_reg_write_func(vtss_state, port_no, 0x0c80, 0x0005, 0x0085, 0x1000, 0x1000);
 
@@ -6292,6 +6872,7 @@ vtss_rc vtss_phy_1588_oos_mitigation_steps_private(vtss_state_t *vtss_state,
     BOOL ams_mode = FALSE;
     BOOL macsec_enable = FALSE;
     BOOL cu_sfp = FALSE;
+    u16 is_power_down = 0;
 
 #if defined(VTSS_FEATURE_MACSEC)
     macsec_enable =  vtss_state->macsec_conf[port_no].glb.init.enable;
@@ -6320,17 +6901,25 @@ vtss_rc vtss_phy_1588_oos_mitigation_steps_private(vtss_state_t *vtss_state,
         return VTSS_RC_OK;
     }
 
-    if(!(phy_id.revision >= 1)){
+    if (!(phy_id.revision >= 1)) {
         VTSS_I("Viper Rev A, OOS algorithm should not be executed\n");
         return VTSS_RC_OK;
     }
+
+    //Check if PHY is in power down mode, in that case do not execute the algorithm.
+    VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_MODE_CONTROL, &is_power_down));
+    if (is_power_down & VTSS_F_PHY_MODE_CONTROL_POWER_DOWN) {
+        VTSS_I("PHY is in Power Down mode, Algorithm not supported. Exiting Silently\n");
+        return VTSS_RC_OK;
+    }
+
 
     if ((vtss_phy_ts_algo_execute_check(vtss_state, port_no)) == FALSE) {
         VTSS_I("PTP is not configured on the port exiting quietly\n");
         return VTSS_RC_OK;
     }
 
-    if(!fifo_conf->skip_rev_check){
+    if (!fifo_conf->skip_rev_check) {
         vtss_phy_ts_version_check(vtss_state, port_no, &ts_new_rev);
         if (ts_new_rev == TRUE) {
             VTSS_I("Not running oos alog port %u\n", port_no);
@@ -6340,58 +6929,60 @@ vtss_rc vtss_phy_1588_oos_mitigation_steps_private(vtss_state_t *vtss_state,
 
     //Select mode of execution depending on the media_type configured on the device.
     switch (media_type) {
-        case VTSS_PHY_MEDIA_IF_CU:
-            cu_mode = TRUE;
-            break;
-        case VTSS_PHY_MEDIA_IF_SFP_PASSTHRU:
-            cu_sfp = TRUE;
-            cu_mode = TRUE;
-            break;
-        case VTSS_PHY_MEDIA_IF_FI_1000BX:
-            cu_mode = FALSE;
-            break;
-        case VTSS_PHY_MEDIA_IF_FI_100FX:
-            cu_mode = FALSE;
-            break;
-        case VTSS_PHY_MEDIA_IF_AMS_CU_PASSTHRU:
-            cu_mode = TRUE;
-            ams_mode = TRUE;
-            break;
-        case VTSS_PHY_MEDIA_IF_AMS_FI_PASSTHRU:
-            cu_mode = FALSE;
-            ams_mode = TRUE;
-            break;
-        case VTSS_PHY_MEDIA_IF_AMS_CU_1000BX:
-            cu_mode = TRUE;
-            ams_mode = TRUE;
-            break;
-        case VTSS_PHY_MEDIA_IF_AMS_FI_1000BX:
-            cu_mode = FALSE;
-            ams_mode = TRUE;
-            break;
-        case VTSS_PHY_MEDIA_IF_AMS_CU_100FX:
-            cu_mode = TRUE;
-            ams_mode = TRUE;
-            break;
-        case VTSS_PHY_MEDIA_IF_AMS_FI_100FX:
-            cu_mode = FALSE;
-            ams_mode = TRUE;
-            break;
-        default:
-            VTSS_E("No Media Type selected\n");
-            return VTSS_RC_OK;
-            break;
+    case VTSS_PHY_MEDIA_IF_CU:
+        cu_mode = TRUE;
+        break;
+    case VTSS_PHY_MEDIA_IF_SFP_PASSTHRU:
+        cu_sfp = TRUE;
+        cu_mode = TRUE;
+        break;
+    case VTSS_PHY_MEDIA_IF_FI_1000BX:
+        cu_mode = FALSE;
+        break;
+    case VTSS_PHY_MEDIA_IF_FI_100FX:
+        cu_mode = FALSE;
+        break;
+    case VTSS_PHY_MEDIA_IF_AMS_CU_PASSTHRU:
+        cu_mode = TRUE;
+        ams_mode = TRUE;
+        break;
+    case VTSS_PHY_MEDIA_IF_AMS_FI_PASSTHRU:
+        cu_mode = FALSE;
+        ams_mode = TRUE;
+        break;
+    case VTSS_PHY_MEDIA_IF_AMS_CU_1000BX:
+        cu_mode = TRUE;
+        ams_mode = TRUE;
+        break;
+    case VTSS_PHY_MEDIA_IF_AMS_FI_1000BX:
+        cu_mode = FALSE;
+        ams_mode = TRUE;
+        break;
+    case VTSS_PHY_MEDIA_IF_AMS_CU_100FX:
+        cu_mode = TRUE;
+        ams_mode = TRUE;
+        break;
+    case VTSS_PHY_MEDIA_IF_AMS_FI_100FX:
+        cu_mode = FALSE;
+        ams_mode = TRUE;
+        break;
+    default:
+        VTSS_E("No Media Type selected\n");
+        return VTSS_RC_OK;
+        break;
     }
 
-    if(ams_mode == TRUE)
-        cu_mode = TRUE;   //Need to run fiber patch in AMS cases
+    if (ams_mode == TRUE) {
+        cu_mode = TRUE;    //Need to run fiber patch in AMS cases
+    }
 
     VTSS_I("Calling OOS Alog ams_mode : %s  cu_mode : %s port_no : %u\n", ams_mode ? "TRUE " : "FALSE ", cu_mode ? "TRUE " : "FALSE ", port_no);
 
-    if(!macsec_enable)
+    if (!macsec_enable) {
         rc = vtss_phy_1588_oos_mitigation_steps_execute(vtss_state, port_no, cu_mode, ams_mode, cu_sfp);
-    else
+    } else {
         VTSS_I("MACsec is enabled, Current 1588 OOS Algorithm does not support MACsec modes");
+    }
 
 #ifdef VTSS_FIFO_SYNC_DEBUG
     gettimeofday(&tv, NULL);
@@ -6400,35 +6991,36 @@ vtss_rc vtss_phy_1588_oos_mitigation_steps_private(vtss_state_t *vtss_state,
     return VTSS_RC_OK;
 }
 static vtss_rc vtss_phy_1588_oos_mitigation_steps_execute(vtss_state_t *vtss_state,
-                                                         const vtss_port_no_t port_no, 
-                                                         BOOL copper,
-                                                         BOOL ams_mode,
-                                                         BOOL cu_sfp)
+                                                          const vtss_port_no_t port_no,
+                                                          BOOL copper,
+                                                          BOOL ams_mode,
+                                                          BOOL cu_sfp)
 {
     vtss_rc rc = VTSS_RC_OK;
     vtss_phy_ts_overflow_info_t overflow_conf;
     vtss_phy_ts_pop_fifo_t pop_fifo;
     u16 reg0, reg9, extreg29, reg23;
-    VTSS_I("Enter vtss_phy_1588_oos_mitigation_steps_execute port_no %u mode of operation %s\n", port_no, copper? "Copper": "Fiber");
+    VTSS_I("Enter vtss_phy_1588_oos_mitigation_steps_execute port_no %u mode of operation %s\n", port_no, copper ? "Copper" : "Fiber");
 
     rc = vtss_phy_1588_oos_mitigation_save_cfg(vtss_state, port_no, &reg0, &reg9, &extreg29, &reg23);
 
-    if(rc != VTSS_RC_OK){
+    if (rc != VTSS_RC_OK) {
         VTSS_E("Not Able to save configuration, returning");
         return VTSS_RC_ERROR;
     }
 
-    if(ams_mode){
+    if (ams_mode) {
         rc = PHY_WR_MASKED_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_PHY_CONTROL,
-                VTSS_F_PHY_EXTENDED_PHY_CONTROL_AMS_OVERRIDE(2),
-                VTSS_M_PHY_EXTENDED_PHY_CONTROL_AMS_OVERRIDE);
+                                VTSS_F_PHY_EXTENDED_PHY_CONTROL_AMS_OVERRIDE(2),
+                                VTSS_M_PHY_EXTENDED_PHY_CONTROL_AMS_OVERRIDE);
     }
 
-    if(rc == VTSS_RC_OK)
+    if (rc == VTSS_RC_OK) {
         rc = vtss_phy_1588_oos_mitigation_isolate_phy(vtss_state, port_no, copper);
+    }
 
-    if(rc == VTSS_RC_OK){
-        if(copper && !cu_sfp){
+    if (rc == VTSS_RC_OK) {
+        if (copper && !cu_sfp) {
             rc = vtss_phy_1588_oos_mitigation_check_frames_remote_local_good(vtss_state, port_no);
         } else if (cu_sfp) {
             rc = vtss_phy_1588_oos_mitigation_media_interface_link_status(vtss_state, port_no);
@@ -6437,72 +7029,82 @@ static vtss_rc vtss_phy_1588_oos_mitigation_steps_execute(vtss_state_t *vtss_sta
     }
 
     //TeslaCsrWrite $port $proc_id 0x00 0x42;#Disable 1588 bypass
-    if(rc == VTSS_RC_OK){
+    if (rc == VTSS_RC_OK) {
         rc = vtss_phy_ts_bypass_set(vtss_state, port_no, FALSE, TRUE);
     }
 
     //after 1
     VTSS_MSLEEP(1);
-    if(rc == VTSS_RC_OK){
+    if (rc == VTSS_RC_OK) {
         rc = vtss_phy_intr_status(vtss_state, port_no, &overflow_conf);
     }
 
     VTSS_I("Value of register 0x2D INGR_INT_STATUS is 0x%x\n", overflow_conf.ingr_intr_status);
     VTSS_I("Value of register 0x4D EGR_INT_STATUS is 0x%x\n", overflow_conf.egr_intr_status);
 
-    if(rc == VTSS_RC_OK)
-    rc = vtss_phy_sw_pop_fifo_get(vtss_state, port_no, &pop_fifo);
+    if (rc == VTSS_RC_OK) {
+        rc = vtss_phy_sw_pop_fifo_get(vtss_state, port_no, &pop_fifo);
+    }
 
     VTSS_I("Value of register 0x9F INGR_SW_POP_FIFO is 0x%x\n", pop_fifo.egr_pop_fifo);
     VTSS_I("Value of register 0xC0 EGR_SW_POP_FIFO is 0x%x\n", pop_fifo.ingr_pop_fifo);
 
-    if(rc == VTSS_RC_OK)
-    rc = vtss_phy_ts_bypass_set(vtss_state, port_no, TRUE, TRUE);
+    if (rc == VTSS_RC_OK) {
+        rc = vtss_phy_ts_bypass_set(vtss_state, port_no, TRUE, TRUE);
+    }
 
     //after 1
     VTSS_MSLEEP(1);
 
-    if(rc == VTSS_RC_OK)
-    rc = vtss_phy_1588_oos_mitigation_soft_reset_pop_fifo(vtss_state, port_no);
+    if (rc == VTSS_RC_OK) {
+        rc = vtss_phy_1588_oos_mitigation_soft_reset_pop_fifo(vtss_state, port_no);
+    }
 
     //after 1
     VTSS_MSLEEP(1);
 
-    if(rc == VTSS_RC_OK)
-    rc = vtss_phy_1588_oos_mitigation_epg_transmit_frames(vtss_state, port_no, copper);
+    if (rc == VTSS_RC_OK) {
+        rc = vtss_phy_1588_oos_mitigation_epg_transmit_frames(vtss_state, port_no, copper);
+    }
 
-    if(rc == VTSS_RC_OK)
-    rc = vtss_phy_ts_bypass_set(vtss_state, port_no, TRUE, TRUE);
+    if (rc == VTSS_RC_OK) {
+        rc = vtss_phy_ts_bypass_set(vtss_state, port_no, TRUE, TRUE);
+    }
 
-    if(rc == VTSS_RC_OK)
-    rc = vtss_phy_1588_oos_mitigation_soft_reset_pop_fifo(vtss_state, port_no);
+    if (rc == VTSS_RC_OK) {
+        rc = vtss_phy_1588_oos_mitigation_soft_reset_pop_fifo(vtss_state, port_no);
+    }
 
     VTSS_MSLEEP(1);
 
-    if(rc == VTSS_RC_OK)
-    rc = vtss_phy_1588_oos_mitigation_execute_core_patch_execute(vtss_state, port_no);
+    if (rc == VTSS_RC_OK) {
+        rc = vtss_phy_1588_oos_mitigation_execute_core_patch_execute(vtss_state, port_no);
+    }
 
     //After 1
     VTSS_MSLEEP(1);
 
     //Enable 1588 Bypass
 
-    if(rc == VTSS_RC_OK)
-    rc = vtss_phy_ts_bypass_set(vtss_state, port_no, TRUE, TRUE);
+    if (rc == VTSS_RC_OK) {
+        rc = vtss_phy_ts_bypass_set(vtss_state, port_no, TRUE, TRUE);
+    }
 
-    if(rc == VTSS_RC_OK)
-    rc = vtss_phy_1588_oos_mitigation_restore_setup(vtss_state, port_no,&reg0, &reg9, &extreg29, &reg23);
+    if (rc == VTSS_RC_OK) {
+        rc = vtss_phy_1588_oos_mitigation_restore_setup(vtss_state, port_no, &reg0, &reg9, &extreg29, &reg23);
+    }
 
     VTSS_MSLEEP(1);
 
-    if(rc == VTSS_RC_OK)
-    rc = vtss_phy_ts_bypass_set(vtss_state, port_no, FALSE, TRUE);
+    if (rc == VTSS_RC_OK) {
+        rc = vtss_phy_ts_bypass_set(vtss_state, port_no, FALSE, TRUE);
+    }
 
-    if(rc != VTSS_RC_OK){
-       VTSS_E("Failure in the execution of Algorithm, Restoring PHY operation");
-       rc = vtss_phy_ts_bypass_set(vtss_state, port_no, FALSE, TRUE);
-       rc = vtss_phy_1588_oos_mitigation_restore_setup(vtss_state, port_no,&reg0, &reg9, &extreg29, &reg23);
-       return VTSS_RC_ERROR;
+    if (rc != VTSS_RC_OK) {
+        VTSS_E("Failure in the execution of Algorithm, Restoring PHY operation");
+        rc = vtss_phy_ts_bypass_set(vtss_state, port_no, FALSE, TRUE);
+        rc = vtss_phy_1588_oos_mitigation_restore_setup(vtss_state, port_no, &reg0, &reg9, &extreg29, &reg23);
+        return VTSS_RC_ERROR;
     }
     VTSS_I("*******************************************************************************\n");
     VTSS_I("********************ALGORITHM EXECUTION COMPLETED******************************\n");
@@ -6558,9 +7160,9 @@ static vtss_rc vtss_phy_1g_ts_fifo_sync_private(vtss_state_t               *vtss
 
     if ((phy_id.part_number == VTSS_PHY_TYPE_8582) || (phy_id.part_number == VTSS_PHY_TYPE_8584) || (phy_id.part_number == VTSS_PHY_TYPE_8575)) {
 
-        rc = vtss_phy_1588_oos_mitigation_steps_private(vtss_state, port_no, fifo_conf); 
+        rc = vtss_phy_1588_oos_mitigation_steps_private(vtss_state, port_no, fifo_conf);
 
-    } else if(( phy_id.part_number == VTSS_PHY_TYPE_8574 ) || ( phy_id.part_number == VTSS_PHY_TYPE_8572)) {
+    } else if (( phy_id.part_number == VTSS_PHY_TYPE_8574 ) || ( phy_id.part_number == VTSS_PHY_TYPE_8572)) {
 
         rc = vtss_phy_ts_tesla_tsp_fifo_sync_private(vtss_state, port_no, pr, fifo_conf, OOS);
 
@@ -6586,5 +7188,8 @@ vtss_rc vtss_phy_1g_ts_fifo_sync(const vtss_inst_t  inst,
     return rc;
 }
 
-#endif /* VTSS_FEATURE_PHY_TIMESTAMP*/
 
+
+
+#endif /* #if defined(VTSS_CHIP_CU_PHY) */
+#endif /* VTSS_FEATURE_PHY_TIMESTAMP*/

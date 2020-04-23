@@ -1,27 +1,25 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
 
 */
@@ -138,6 +136,7 @@ static BOOL live_debug_enable = TRUE;
 // In : Pointer to the board definition
 void vtss_board_phy_init(vtss_appl_board_t *board)
 {
+    memset (board, 0, sizeof(vtss_appl_board_t));
     board->descr = "PHY"; // Description
     board->target = VTSS_TARGET_CU_PHY; // Target
 
@@ -689,13 +688,15 @@ and needs be called on both switches.
 Application: Ordinary/Boundary clock, 1 step
 Delay method: End-to-End delay measurement method
 */
-
+/* ETH-PTP Encapsulation */
 vtss_rc vtss_1588_sample_flows_ep(const vtss_inst_t inst, 
                                   const vtss_port_no_t ing_port_no, 
                                   const vtss_port_no_t egr_port_no, 
 	                          const vtss_phy_ts_engine_t eng_id,
                                   int   numflows, 
-                                  u8    in_flow)
+                                  u8    in_flow,
+                                  BOOL  resv_oos_flow7)
+
 {
     vtss_rc rc = VTSS_RC_ERROR;
     u8      flow_id = 0;
@@ -744,6 +745,7 @@ vtss_rc vtss_1588_sample_flows_ep(const vtss_inst_t inst,
 
 
 	do {
+                /* ALWAYS perform a "Get" before performing modifications and calling a "Set" */
 		rc = vtss_phy_ts_ingress_engine_conf_get(inst, ing_port_no, eng_id, flow_conf);
 		if (rc != VTSS_RC_OK) {
 			printf("PHY TS Engine %d  Conf_get Failed!\n", eng_id);
@@ -752,15 +754,34 @@ vtss_rc vtss_1588_sample_flows_ep(const vtss_inst_t inst,
 
 		/* engine enable */
 		flow_conf->eng_mode = TRUE;
+                /* This is an Auto-configuration of flows based upon the FLOW_ID and NumFlows for DEMO Purposes ONLY */
                 for (flow_id = in_flow; flow_id < numflows; flow_id++) {
 		    /* Map each flow to the channel which already mapped to the port */
 		    flow_conf->channel_map[flow_id] = VTSS_PHY_TS_ENG_FLOW_VALID_FOR_CH0 | VTSS_PHY_TS_ENG_FLOW_VALID_FOR_CH1;
 
+                   /* Enable the MAC flow */
+                    /* If OOS Patch is enabled, then we need to Reserve Flow_id=7 (Not Enable) for OOS recovery steps */
+                    if (flow_id == 7) {
+                        if (resv_oos_flow7) {
+                            printf("PHY TS Engine %d  Disabling FLOW_7, Reserving for OOS Recovery!\n", eng_id);
+                            flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].flow_en = FALSE;
+                        } else {
+                            flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].flow_en = TRUE;
+                        }
+                    }
+
 		    /* Enable the MAC flow */
 		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].flow_en = TRUE;
+
+		    /* Options are: VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT if Eth_Addr to be matched, */
+                    /* VTSS_PHY_TS_ETH_ADDR_MATCH_ANY_UNICAST if only matching on UNICAST bit,  */
+                    /* or  VTSS_PHY_TS_ETH_ADDR_MATCH_ANY_MULTICAST if MULTICAST bit is set */
 		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT;
-		    /* Notify the engine which mac address needs to be matched(dest/src) */
+
+		    /* Notify the engine which mac address needs to be matched(dest/src/both) */
+                    /* Options are: VTSS_PHY_TS_ETH_MATCH_DEST_ADDR, VTSS_PHY_TS_ETH_MATCH_SRC_ADDR, VTSS_PHY_TS_ETH_MATCH_SRC_OR_DEST */ 
 		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].addr_match_select = VTSS_PHY_TS_ETH_MATCH_DEST_ADDR;
+
 		    /* Notify the engine if it is VLAN flow */
 		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].vlan_check = vlan_check;
                     /* Config for Checking Specific VLAN Tagging  */
@@ -787,14 +808,28 @@ vtss_rc vtss_1588_sample_flows_ep(const vtss_inst_t inst,
                     }
 
 		    /* Configure the MAC address of the flow, needs to be time stamped */
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[0] = 0x00;
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[1] = 0x00;
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[2] = 0x00;
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[3] = 0x00;
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[4] = 0x00;
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[5] = 0x01+flow_id;
+		    /* This is only applicable if flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT */
+		    /* if flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_ANY_MULTICAST or */
+                    /* if flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_ANY_UNICAST, then mac_addr is not used i- Zero'd */
+                    if (flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].addr_match_mode == VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT) { 
+		        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[0] = 0x00;
+		        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[1] = 0x00;
+		        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[2] = 0x00;
+		        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[3] = 0x00;
+		        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[4] = 0x00;
+		        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[5] = 0x01+flow_id;
+                    } else {
+		        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[0] = 0x00;
+		        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[1] = 0x00;
+		        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[2] = 0x00;
+		        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[3] = 0x00;
+		        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[4] = 0x00;
+		        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[5] = 0x00;
+                    }
+                    
                     /* ************************************************************************* */
                     /* For Demo Purpose ONLY, Modify eth1 MAC Addr for each flow to be different */
+                    /* if not in Multi-Cast or Uni-Cast                                          */
                     /* ************************************************************************* */
 		
 	            printf("flow_id: %d::ETHERTYPE_IEEE_PTP_1588:: MAC_Addr: %02x:%02x:%02x:%02x:%02x:%02x\n", flow_id,
@@ -806,8 +841,10 @@ vtss_rc vtss_1588_sample_flows_ep(const vtss_inst_t inst,
 		        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[5]);
                 }
 
+                /* Set the Ethernet Type to be matched  */
 		flow_conf->flow_conf.ptp.eth1_opt.comm_opt.etype = ETHERTYPE_IEEE_PTP_1588; 	//0x8847; 
 
+                /* Set the INGRESS Engine Config - for ETH-PTP, all other comparitors are skipped  */
 		rc = vtss_phy_ts_ingress_engine_conf_set(inst, ing_port_no, eng_id, flow_conf);
 		if (rc == VTSS_RC_OK) {
 			 printf("PHY TS Engine %d  Conf_set Success \n", eng_id);
@@ -818,6 +855,8 @@ vtss_rc vtss_1588_sample_flows_ep(const vtss_inst_t inst,
 	        printf("Egress:: Port:%d : Engine#%d  Flow_id:%d, numFlows:%d :: ETH/PTP\n", 
                           egr_port_no, eng_id, flow_id, numflows);
 		
+                /* Set the EGRESS Engine Config - for ETH-PTP, all other comparitors are skipped  */
+                /* This config is Symmetric since INGRESS and EGRESS are being configured identically  */
 		rc = vtss_phy_ts_egress_engine_conf_set(inst, egr_port_no, eng_id, flow_conf);
 		if (rc == VTSS_RC_OK) {
 			printf("PHY TS Engine %d  Conf_set Success\n", eng_id);
@@ -829,6 +868,7 @@ vtss_rc vtss_1588_sample_flows_ep(const vtss_inst_t inst,
 	
 }
 
+/* ETH-OAM Encapsulation */
 vtss_rc vtss_1588_sample_flows_eoam(const vtss_inst_t inst,
                                   const vtss_port_no_t ing_port_no,
                                   const vtss_port_no_t egr_port_no,
@@ -859,6 +899,7 @@ vtss_rc vtss_1588_sample_flows_eoam(const vtss_inst_t inst,
         }
 
         do {
+               /* ALWAYS perform a "Get" before performing modifications and calling a "Set" */
                 rc = vtss_phy_ts_ingress_engine_conf_get(inst, ing_port_no, eng_id, flow_conf);
                 if (rc != VTSS_RC_OK) {
                         printf("PHY TS Engine %d  Conf_get Failed!\n", eng_id);
@@ -867,28 +908,46 @@ vtss_rc vtss_1588_sample_flows_eoam(const vtss_inst_t inst,
 
                 /* engine enable */
                 flow_conf->eng_mode = TRUE;
+                /* This is an Auto-configuration of flows based upon the FLOW_ID and NumFlows for DEMO Purposes ONLY */
                 for (flow_id = in_flow; flow_id < numflows; flow_id++) {
                     /* Map each flow to the channel which already mapped to the port */
                     flow_conf->channel_map[flow_id] = VTSS_PHY_TS_ENG_FLOW_VALID_FOR_CH0 | VTSS_PHY_TS_ENG_FLOW_VALID_FOR_CH1;
 
                     /* Enable the MAC flow */
                     flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].flow_en = TRUE;
+                    /* Options are: VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT if Eth_Addr to be matched, */
+                    /* VTSS_PHY_TS_ETH_ADDR_MATCH_ANY_UNICAST if only matching on UNICAST bit,  */
+                    /* or  VTSS_PHY_TS_ETH_ADDR_MATCH_ANY_MULTICAST if MULTICAST bit is set */
                     flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT;
-                    /* Notify the engine which mac address needs to be matched(dest/src) */
+                    /* Notify the engine which mac address needs to be matched(dest/src/both) */
+                    /* Options are: VTSS_PHY_TS_ETH_MATCH_DEST_ADDR, VTSS_PHY_TS_ETH_MATCH_SRC_ADDR, VTSS_PHY_TS_ETH_MATCH_SRC_OR_DEST */
                     flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].addr_match_select = VTSS_PHY_TS_ETH_MATCH_DEST_ADDR;
                     /* Notify the engine if it is VLAN flow */
                     flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].vlan_check = FALSE;
                     /* Configure the MAC address of the flow, needs to be time stamped */
-                    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[0] = 0x00;
-                    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[1] = 0x00;
-                    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[2] = 0x00;
-                    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[3] = 0x00;
-                    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[4] = 0x00;
-                    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[5] = 0x01+flow_id;
+                    /* This is only applicable if flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT */
+                    /* if flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_ANY_MULTICAST or */
+                    /* if flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_ANY_UNICAST, then mac_addr is not used i- Zero'd */
+                    if (flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].addr_match_mode == VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT) {
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[0] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[1] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[2] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[3] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[4] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[5] = 0x01+flow_id;
+                    } else {
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[0] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[1] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[2] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[3] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[4] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[5] = 0x00;
+                    }
+
                     /* ************************************************************************* */
                     /* For Demo Purpose ONLY, Modify eth1 MAC Addr for each flow to be different */
                     /* ************************************************************************* */
-                   printf("flow_id: %d::ETHERTYPE_IEEE_PTP_1588:: MAC_Addr: %02x:%02x:%02x:%02x:%02x:%02x\n", flow_id,
+                    printf("flow_id: %d::ETHERTYPE_IEEE_PTP_1588:: MAC_Addr: %02x:%02x:%02x:%02x:%02x:%02x\n", flow_id,
                         flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[0],
                         flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[1],
                         flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[2],
@@ -897,8 +956,9 @@ vtss_rc vtss_1588_sample_flows_eoam(const vtss_inst_t inst,
                         flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[5]);
                 }
 
+                /* Set the Ethernet Type to be matched  */
                 flow_conf->flow_conf.ptp.eth1_opt.comm_opt.etype = ETHERTYPE_IEEE_802_1_AG;      //0x8902
-
+                /* Set the INGRESS Engine Config - for ETH-OAM, all other comparitors are skipped  */
                 rc = vtss_phy_ts_ingress_engine_conf_set(inst, ing_port_no, eng_id, flow_conf);
                 if (rc == VTSS_RC_OK) {
                          printf("PHY TS Engine %d  Conf_set Success \n", eng_id);
@@ -909,6 +969,8 @@ vtss_rc vtss_1588_sample_flows_eoam(const vtss_inst_t inst,
                 printf("Egress:: Port:%d : Engine#%d  Flow_id:%d, numFlows:%d :: ETH/OAM\n",
                           egr_port_no, eng_id, flow_id, numflows);
 
+                /* Set the EGRESS Engine Config - for ETH-PTP, all other comparitors are skipped  */
+                /* This config is Symmetric since INGRESS and EGRESS are being configured identically  */
                 rc = vtss_phy_ts_egress_engine_conf_set(inst, egr_port_no, eng_id, flow_conf);
                 if (rc == VTSS_RC_OK) {
                         printf("PHY TS Engine %d  Conf_set Success\n", eng_id);
@@ -921,12 +983,17 @@ vtss_rc vtss_1588_sample_flows_eoam(const vtss_inst_t inst,
 }
 
 
+/* ETH-IP-PTP Encapsulation */
+/* This is Really ETH-IP-UDP-PTP Encapsulation and you can select IPv4 or IPv6 */
 vtss_rc vtss_1588_sample_flows_eip(const vtss_inst_t inst, 
                                   const vtss_port_no_t ing_port_no, 
                                   const vtss_port_no_t egr_port_no, 
 	                          const vtss_phy_ts_engine_t eng_id,
                                   int   numflows, 
-                                  const u8 in_flow)
+                                  const u8 in_flow,
+                                  BOOL  resv_oos_flow7)
+
+
 {
     vtss_rc rc = VTSS_RC_ERROR;
     vtss_phy_ts_engine_flow_conf_t *flow_conf;
@@ -990,7 +1057,7 @@ vtss_rc vtss_1588_sample_flows_eip(const vtss_inst_t inst,
 	} while (!((ipver == 0) || (ipver == 1)));
 
 	do {
-
+                /* ALWAYS perform a "Get" before performing modifications and calling a "Set" */
 		rc = vtss_phy_ts_ingress_engine_conf_get(inst, ing_port_no, eng_id, flow_conf);
 		if (rc != VTSS_RC_OK) {
 			printf("PHY TS Engine %d  Conf_get Failed!\n", eng_id);
@@ -1000,15 +1067,30 @@ vtss_rc vtss_1588_sample_flows_eip(const vtss_inst_t inst,
 		/* engine enable */
 		flow_conf->eng_mode = TRUE;
 
+               /* This is an Auto-configuration of flows based upon the FLOW_ID and NumFlows for DEMO Purposes ONLY */
                 for (flow_id = in_flow; flow_id < numflows; flow_id++) {
 		    /* Map each flow to the channel which already mapped to the port */
 		    flow_conf->channel_map[flow_id] = VTSS_PHY_TS_ENG_FLOW_VALID_FOR_CH0 | VTSS_PHY_TS_ENG_FLOW_VALID_FOR_CH1;
+                   /* Enable the MAC flow */
+                    /* If OOS Patch is enabled, then we need to Reserve Flow_id=7 (Not Enable) for OOS recovery steps */
+                    if (flow_id == 7) {
+                        if (resv_oos_flow7) {
+                            printf("PHY TS Engine %d  Disabling FLOW_7, Reserving for OOS Recovery!\n", eng_id);
+                            flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].flow_en = FALSE;
+                        } else {
+                            flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].flow_en = TRUE;
+                        }
+                    }
 
-		    /* Enable the MAC flow */
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].flow_en = TRUE;
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT;
-		    /* Notify the engine which mac address needs to be matched(dest/src) */
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].addr_match_select = VTSS_PHY_TS_ETH_MATCH_DEST_ADDR;
+                    /* Enable the MAC flow */
+                    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].flow_en = TRUE;
+                    /* Options are: VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT if Eth_Addr to be matched, */
+                    /* VTSS_PHY_TS_ETH_ADDR_MATCH_ANY_UNICAST if only matching on UNICAST bit,  */
+                    /* or  VTSS_PHY_TS_ETH_ADDR_MATCH_ANY_MULTICAST if MULTICAST bit is set */
+                    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT;
+                    /* Notify the engine which mac address needs to be matched(dest/src/both) */
+                    /* Options are: VTSS_PHY_TS_ETH_MATCH_DEST_ADDR, VTSS_PHY_TS_ETH_MATCH_SRC_ADDR, VTSS_PHY_TS_ETH_MATCH_SRC_OR_DEST */
+                    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].addr_match_select = VTSS_PHY_TS_ETH_MATCH_DEST_ADDR;
 		    /* Notify the engine if it is VLAN flow */
 		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].vlan_check = vlan_check;
 
@@ -1035,30 +1117,45 @@ vtss_rc vtss_1588_sample_flows_eip(const vtss_inst_t inst,
                         }
                     }
 
-		    /* Configure the MAC address of the flow, needs to be time stamped */
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[0] = 0x00;
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[1] = 0x00;
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[2] = 0x00;
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[3] = 0x00;
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[4] = 0x00;
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[5] = 0x01+flow_id;
+                    /* Configure the MAC address of the flow, needs to be time stamped */
+                    /* This is only applicable if flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT */
+                    /* if flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_ANY_MULTICAST or */
+                    /* if flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_ANY_UNICAST, then mac_addr is not used i- Zero'd */
+                    if (flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].addr_match_mode == VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT) {
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[0] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[1] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[2] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[3] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[4] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[5] = 0x01+flow_id;
+                    } else {
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[0] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[1] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[2] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[3] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[4] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[5] = 0x00;
+                    }
+
                     /* ************************************************************************* */
                     /* For Demo Purpose ONLY, Modify eth1 MAC Addr for each flow to be different */
                     /* For Demo Purpose ONLY, Modify ip1 IP_Addr for each flow to be different */
                     /* ************************************************************************* */
 
+                     /* ipver == 0 is IPv4;   ipver != 0 is IPv6 */
 		     if(ipver == 0 ){
-		         /* match 1st IP address - Depends on SRC or DEST Flag*/
+		         /* match 1st IPv4 address - Depends on SRC or DEST Flag*/
 			 flow_conf->flow_conf.ptp.eth1_opt.comm_opt.etype = ETHERTYPE_IEEE_IPV4;    //0x0800; 
 	                 /* Set IP Version to IPv4 */
 	                 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.ip_mode = VTSS_PHY_TS_IP_VER_4;
+                         /* Note: To completely SKIP IPv4 Matching, set the ip_addr.ipv4.mask = 0x0 */
 			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv4.mask = 0xffffffff;
 			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv4.addr = 0x0a0a0a0a+flow_id;	/* 153.136.119.102	<<<< FLow_Diff */
 	                 printf("flow_id: %d::ETHERTYPE_IEEE_IPV4:: IP1: 0x%08x  Mask:0x%08x\n", flow_id,
 			       flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv4.addr,
 			       flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv4.mask);
 		     } else {
-		         /* match 1st IP address - Depends on SRC or DEST Flag*/
+		         /* match 1st IPv6 address - Depends on SRC or DEST Flag*/
 			 flow_conf->flow_conf.ptp.eth1_opt.comm_opt.etype = ETHERTYPE_IEEE_IPV6;	//0x86DD; 
 		         /* Set IP Version to IPv6 */
 		         flow_conf->flow_conf.ptp.ip1_opt.comm_opt.ip_mode = VTSS_PHY_TS_IP_VER_6;
@@ -1067,6 +1164,7 @@ vtss_rc vtss_1588_sample_flows_eip(const vtss_inst_t inst,
 			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.addr[1] = 0xC000000C;
 			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.addr[0] = 0x1+flow_id; 
 			 
+                         /* Note: To completely SKIP IPv6 Matching, set the ip_addr.ipv6.mask[0..3] = 0x0 */
 			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[3] = 0xFFFFFFFF;
 			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[2] = 0xFFFFFFFF;
 			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[1] = 0xFFFFFFFF;
@@ -1083,10 +1181,11 @@ vtss_rc vtss_1588_sample_flows_eip(const vtss_inst_t inst,
 			     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[1],
 			     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[0]);
 		     }
+
 		     /* Enable the IP flow */
 		     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].flow_en = TRUE;
-		 
-		     /* match 1st IP address - Depends on SRC or DEST Flag*/
+		     /* match 1st IP address - Depends on SRC or DEST or BOTH Flag*/
+                     /* Options are: VTSS_PHY_TS_IP_MATCH_SRC; VTSS_PHY_TS_IP_MATCH_DEST; VTSS_PHY_TS_IP_MATCH_SRC_OR_DEST */
 		     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].match_mode = VTSS_PHY_TS_IP_MATCH_DEST;
 
 	             printf("flow_id: %d::ETH1 MAC_Addr: %02x:%02x:%02x:%02x:%02x:%02x\n", flow_id,
@@ -1099,15 +1198,21 @@ vtss_rc vtss_1588_sample_flows_eip(const vtss_inst_t inst,
                  }
 
 		 /* Set dest port to 319 to receive PTP event messages */
+		 /* If setup for Tesla OOS Recovery, EPG can only support one of the following: */
+                 /* dport_val = 319; dport_mask = 0xffff; sport_val=0; sport_mask=0  */
+                 /* dport_val = 319; dport_mask = 0xffff; sport_val=319; sport_mask=0xffff  */
 		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_val = 319; 	 /* UDP Dest Port 319/320 */
 		 /* Set dest port mask 0 means any port 0xFFFF means exact match to given port */
 		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_mask = 0xffff;  /* UDP Dest Port Mask	*/
-		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val = 1;		/* UDP Source Port */
-		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_mask = 0xffff; 	  /* UDP Source Port Mask */
-                 printf("Flow: %d  IP1: UDP_dport: %d;   UDP_Sport: %d\n", flow_id,
-		     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_val,
-		     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val);
+		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val = 0x0;	/* UDP Source Port */
+		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_mask = 0x0; 	  /* UDP Source Port Mask */
+                 printf("Flow: %d  IP1: UDP_dport: %d; dportM:0x%04x;  UDP_Sport: %d; SportM: 0x%04x\n", flow_id,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_val,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_mask,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_mask);
 
+                 /* Set the INGRESS Engine Config - for ETH-PTP, all other comparitors are skipped  */
 		 rc = vtss_phy_ts_ingress_engine_conf_set(inst, ing_port_no, eng_id, flow_conf);
 		 if (rc == VTSS_RC_OK) {
 			 printf("PHY TS Engine %d  Conf_set Success\n", eng_id);
@@ -1115,9 +1220,11 @@ vtss_rc vtss_1588_sample_flows_eip(const vtss_inst_t inst,
 			 printf("PHY TS Engine %d  Conf_set Failed!\n", eng_id);
 			 break;
 		 }
-	        printf("Egress:: Port:%d : Engine#%d Flow_id:%d, numFlows:%d :: Encapsulation: ETH/IP/PTP \n", 
+	         printf("Egress:: Port:%d : Engine#%d Flow_id:%d, numFlows:%d :: Encapsulation: ETH/IP/PTP \n", 
                     egr_port_no, eng_id, flow_id, numflows);
 		
+                /* Set the EGRESS Engine Config - for ETH-PTP, all other comparitors are skipped  */
+                /* This config is Symmetric since INGRESS and EGRESS are being configured identically  */
 		rc = vtss_phy_ts_egress_engine_conf_set(inst, egr_port_no, eng_id, flow_conf);
 		if (rc == VTSS_RC_OK) {
 			printf("PHY TS Engine %d  Conf_set Success\n", eng_id);
@@ -1129,6 +1236,8 @@ vtss_rc vtss_1588_sample_flows_eip(const vtss_inst_t inst,
 
 }
 
+/* ETH-IP-IP-PTP Encapsulation */
+/* This is Really ETH-IP-IP-UDP-PTP Encapsulation and you can select IPv4 or IPv6 */
 vtss_rc vtss_1588_sample_flows_eiip(const vtss_inst_t inst, 
                                     const vtss_port_no_t ing_port_no, 
                                     const vtss_port_no_t egr_port_no, 
@@ -1197,7 +1306,7 @@ vtss_rc vtss_1588_sample_flows_eiip(const vtss_inst_t inst,
 	} while (!((ipver == 0) || (ipver == 1)));
 
 	do {
-
+                /* ALWAYS perform a "Get" before performing modifications and calling a "Set" */
 		rc = vtss_phy_ts_ingress_engine_conf_get(inst, ing_port_no, eng_id, flow_conf);
 		if (rc != VTSS_RC_OK) {
 			printf("PHY TS Engine %d  Conf_get Failed!\n", eng_id);
@@ -1212,18 +1321,36 @@ vtss_rc vtss_1588_sample_flows_eiip(const vtss_inst_t inst,
 		    flow_conf->channel_map[flow_id] = VTSS_PHY_TS_ENG_FLOW_VALID_FOR_CH0 | VTSS_PHY_TS_ENG_FLOW_VALID_FOR_CH1;
 		    /* Enable the MAC flow */
 		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].flow_en = TRUE;
+                    /* Options are: VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT if Eth_Addr to be matched, */
+                    /* VTSS_PHY_TS_ETH_ADDR_MATCH_ANY_UNICAST if only matching on UNICAST bit,  */
+                    /* or  VTSS_PHY_TS_ETH_ADDR_MATCH_ANY_MULTICAST if MULTICAST bit is set */
 		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT;
-		    /* Notify the engine which mac address needs to be matched(dest/src) */
+                    /* Notify the engine which mac address needs to be matched(dest/src/both) */
+                    /* Options are: VTSS_PHY_TS_ETH_MATCH_DEST_ADDR, VTSS_PHY_TS_ETH_MATCH_SRC_ADDR, VTSS_PHY_TS_ETH_MATCH_SRC_OR_DEST */
 		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].addr_match_select = VTSS_PHY_TS_ETH_MATCH_DEST_ADDR;
 		    /* Notify the engine if it is VLAN flow */
 		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].vlan_check = FALSE;
 		    /* Configure the MAC address of the flow, needs to be time stamped */
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[0] = 0x00;
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[1] = 0x00;
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[2] = 0x00;
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[3] = 0x00;
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[4] = 0x00;
-		    flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[5] = 0x01+flow_id;
+                    /* Configure the MAC address of the flow, needs to be time stamped */
+                    /* This is only applicable if flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT */
+                    /* if flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_ANY_MULTICAST or */
+                    /* if flow_opt[flow_id].addr_match_mode = VTSS_PHY_TS_ETH_ADDR_MATCH_ANY_UNICAST, then mac_addr is not used i- Zero'd */
+                    if (flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].addr_match_mode == VTSS_PHY_TS_ETH_ADDR_MATCH_48BIT) {
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[0] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[1] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[2] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[3] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[4] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[5] = 0x01+flow_id;
+                    } else {
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[0] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[1] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[2] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[3] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[4] = 0x00;
+                        flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[5] = 0x00;
+                    }
+
                 /* ************************************************************************* */
                 /* For Demo Purpose ONLY, Modify eth1 MAC Addr for each flow to be different */
                 /* ************************************************************************* */
@@ -1234,15 +1361,19 @@ vtss_rc vtss_1588_sample_flows_eiip(const vtss_inst_t inst,
 		     flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[3],
 		     flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[4],
 		     flow_conf->flow_conf.ptp.eth1_opt.flow_opt[flow_id].mac_addr[5]);
-		     /* Enable the IP flow */
-		     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].flow_en = TRUE;
-		     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].match_mode = VTSS_PHY_TS_IP_MATCH_DEST;
 
+		     /* Enable the IP1 flow */
+		     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].flow_en = TRUE;
+                     /* match 1st IP address - Depends on SRC or DEST or BOTH Flag*/
+                     /* Options are: VTSS_PHY_TS_IP_MATCH_SRC; VTSS_PHY_TS_IP_MATCH_DEST; VTSS_PHY_TS_IP_MATCH_SRC_OR_DEST */
+		     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].match_mode = VTSS_PHY_TS_IP_MATCH_DEST;
+                     /* ipver == 0 is IPv4;   ipver != 0 is IPv6 */
                      if(ipver == 0 ){
 		         /* Set IP Version to IPv4 */
 		         flow_conf->flow_conf.ptp.ip1_opt.comm_opt.ip_mode = VTSS_PHY_TS_IP_VER_4;
 		         /* match 1st IP address - Depends on SRC or DEST Flag*/
                          flow_conf->flow_conf.ptp.eth1_opt.comm_opt.etype = ETHERTYPE_IEEE_IPV4;    //0x0800; 
+                         /* Note: To completely SKIP IPv4 Matching, set the ip_addr.ipv4.mask = 0x0 */
                          flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv4.mask = 0xffffffff;
                          flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv4.addr = 0x0a0a0a0a+flow_id;     /* 153.136.119.102      <<<< FLow_Diff */
                          printf("flow_id: %d::ETHERTYPE_IEEE_IPV4:: IP1: 0x%08x  Mask:0x%08x\n", flow_id,
@@ -1257,7 +1388,7 @@ vtss_rc vtss_1588_sample_flows_eiip(const vtss_inst_t inst,
 			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.addr[2] = 0xB000000B;
 			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.addr[1] = 0xC000000C;
 			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.addr[0] = 0x1+flow_id; 
-			 
+                         /* Note: To completely SKIP IPv6 Matching, set the ip_addr.ipv6.mask[0..3] = 0x0 */
 			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[3] = 0xFFFFFFFF;
 			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[2] = 0xFFFFFFFF;
 			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[1] = 0xFFFFFFFF;
@@ -1275,15 +1406,18 @@ vtss_rc vtss_1588_sample_flows_eiip(const vtss_inst_t inst,
 			     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[0]);
 		     }
 		 
+		     /* Enable the IP2 flow */
 		     flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].flow_en = TRUE;
-		     /* match 1st IP address - Depends on SRC or DEST Flag*/
+                     /* match 2nd IP address - Depends on SRC or DEST or BOTH Flag*/
+                     /* Options are: VTSS_PHY_TS_IP_MATCH_SRC; VTSS_PHY_TS_IP_MATCH_DEST; VTSS_PHY_TS_IP_MATCH_SRC_OR_DEST */
 		     flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].match_mode = VTSS_PHY_TS_IP_MATCH_DEST;
-
-                     if(ipver == 0 ){
+                     /* ipver == 0 is IPv4;   ipver != 0 is IPv6 */
+                     if(ipver == 0 ) {
                          /* Set IP Version to IPv4 */
                          flow_conf->flow_conf.ptp.ip2_opt.comm_opt.ip_mode = VTSS_PHY_TS_IP_VER_4;
                          /* match 1st IP address - Depends on SRC or DEST Flag*/
                          flow_conf->flow_conf.ptp.eth2_opt.comm_opt.etype = ETHERTYPE_IEEE_IPV4;    //0x0800; 
+                         /* Note: To completely SKIP IPv4 Matching, set the ip_addr.ipv4.mask = 0x0 */
                          flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv4.mask = 0xffffffff;
                          flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv4.addr = 0x0a0a0a0a+flow_id;     /* 153.136.119.102      <<<< FLow_Diff */
                          printf("flow_id: %d::ETHERTYPE_IEEE_IPV4:: IP2: 0x%08x  Mask:0x%08x\n", flow_id,
@@ -1294,50 +1428,56 @@ vtss_rc vtss_1588_sample_flows_eiip(const vtss_inst_t inst,
 		         flow_conf->flow_conf.ptp.ip1_opt.comm_opt.ip_mode = VTSS_PHY_TS_IP_VER_6;
 		         /* match 1st IP address - Depends on SRC or DEST Flag*/
                          flow_conf->flow_conf.ptp.eth1_opt.comm_opt.etype = ETHERTYPE_IEEE_IPV6;        //0x86DD
-			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.addr[3] = 0xA000000A;
-			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.addr[2] = 0xB000000B;
-			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.addr[1] = 0xC000000C;
-			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.addr[0] = 0x1+flow_id; 
-			 
-			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[3] = 0xFFFFFFFF;
-			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[2] = 0xFFFFFFFF;
-			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[1] = 0xFFFFFFFF;
-			 flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[0] = 0xFFFFFFFF;
+			 flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv6.addr[3] = 0xA000000A;
+			 flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv6.addr[2] = 0xB000000B;
+			 flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv6.addr[1] = 0xC000000C;
+			 flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv6.addr[0] = 0x1+flow_id; 
+                         /* Note: To completely SKIP IPv6 Matching, set the ip_addr.ipv6.mask[0..3] = 0x0 */
+			 flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv6.mask[3] = 0xFFFFFFFF;
+			 flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv6.mask[2] = 0xFFFFFFFF;
+			 flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv6.mask[1] = 0xFFFFFFFF;
+			 flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv6.mask[0] = 0xFFFFFFFF;
 
-	                 printf("flow_id: %d::ETHERTYPE_IEEE_IPV6:: IP1: 0x%08x:%08x:%08x:%08x\n", flow_id,
-			     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.addr[3],
-			     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.addr[2],
-			     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.addr[1],
-			     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.addr[0]);
+	                 printf("flow_id: %d::ETHERTYPE_IEEE_IPV6:: IP2: 0x%08x:%08x:%08x:%08x\n", flow_id,
+			     flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv6.addr[3],
+			     flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv6.addr[2],
+			     flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv6.addr[1],
+			     flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv6.addr[0]);
 	                 printf("flow_id: %d::ETHERTYPE_IEEE_IPV6:: MSK: 0x%08x:%08x:%08x:%08x\n", flow_id,
-			     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[3],
-			     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[2],
-			     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[1],
-			     flow_conf->flow_conf.ptp.ip1_opt.flow_opt[flow_id].ip_addr.ipv6.mask[0]);
+			     flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv6.mask[3],
+			     flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv6.mask[2],
+			     flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv6.mask[1],
+			     flow_conf->flow_conf.ptp.ip2_opt.flow_opt[flow_id].ip_addr.ipv6.mask[0]);
                      }
                  }
+
                  /* IP1 */
 		 /* Set dest port to 319 to receive PTP event messages */
 		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_val = 319; 	 /* UDP Dest Port 319/320 */
 		 /* Set dest port mask 0 means any port 0xFFFF means exact match to given port */
 		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_mask = 0xffff;  /* UDP Dest Port Mask	*/
-		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val = 1;		/* UDP Source Port */
-		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_mask = 0xffff; 	  /* UDP Source Port Mask */
-                 printf("Flow: %d  IP1: UDP_dport: %d;   UDP_Sport: %d\n", flow_id,
-		     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_val,
-		     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val);
+		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val = 0;		/* UDP Source Port */
+		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_mask = 0x0; 	  /* UDP Source Port Mask */
+                 printf("Flow: %d  IP1: UDP_dport: %d; dportM:0x%04x;  UDP_Sport: %d; SportM: 0x%04x\n", flow_id,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_val,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_mask,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_mask);
 
                  /* IP2 */
 		 /* Set dest port to 319 to receive PTP event messages */
 		 flow_conf->flow_conf.ptp.ip2_opt.comm_opt.dport_val = 319; 	 /* UDP Dest Port 319/320 */
 		 /* Set dest port mask 0 means any port 0xFFFF means exact match to given port */
 		 flow_conf->flow_conf.ptp.ip2_opt.comm_opt.dport_mask = 0xffff;  /* UDP Dest Port Mask	*/
-		 flow_conf->flow_conf.ptp.ip2_opt.comm_opt.sport_val = 1;		/* UDP Source Port */
-		 flow_conf->flow_conf.ptp.ip2_opt.comm_opt.sport_mask = 0xffff; 	  /* UDP Source Port Mask */
-                 printf("Flow: %d  IP2: UDP_dport: %d;   UDP_Sport: %d\n", flow_id,
-		     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_val,
-		     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val);
+		 flow_conf->flow_conf.ptp.ip2_opt.comm_opt.sport_val = 0;		/* UDP Source Port */
+		 flow_conf->flow_conf.ptp.ip2_opt.comm_opt.sport_mask = 0x0; 	/* UDP Source Port Mask */
+                 printf("Flow: %d  IP2: UDP_dport: %d; dportM:0x%04x;  UDP_Sport: %d; SportM: 0x%04x\n", flow_id,
+                     flow_conf->flow_conf.ptp.ip2_opt.comm_opt.dport_val,
+                     flow_conf->flow_conf.ptp.ip2_opt.comm_opt.dport_mask,
+                     flow_conf->flow_conf.ptp.ip2_opt.comm_opt.sport_val,
+                     flow_conf->flow_conf.ptp.ip2_opt.comm_opt.sport_mask);
 
+                 /* Set the INGRESS Engine Config - for ETH-PTP, all other comparitors are skipped  */
 		 rc = vtss_phy_ts_ingress_engine_conf_set(inst, ing_port_no, eng_id, flow_conf);
 		 if (rc == VTSS_RC_OK) {
 			 printf("PHY TS Engine %d  Conf_set Success\n", eng_id);
@@ -1348,6 +1488,8 @@ vtss_rc vtss_1588_sample_flows_eiip(const vtss_inst_t inst,
 	         printf("Egress:: Port:%d : Engine#%d Flow_id:%d, numFlows:%d :: Encapsulation: ETH/IP/IP/PTP \n", 
                     egr_port_no, eng_id, flow_id, numflows);
 		
+                /* Set the EGRESS Engine Config - for ETH-PTP, all other comparitors are skipped  */
+                /* This config is Symmetric since INGRESS and EGRESS are being configured identically  */
 		rc = vtss_phy_ts_egress_engine_conf_set(inst, egr_port_no, eng_id, flow_conf);
 		if (rc == VTSS_RC_OK) {
 			printf("PHY TS Engine %d  Conf_set Success\n", eng_id);
@@ -1358,6 +1500,7 @@ vtss_rc vtss_1588_sample_flows_eiip(const vtss_inst_t inst,
 	} while (0);
 }
 
+/* ETH-ETH-PTP Encapsulation */
 vtss_rc vtss_1588_sample_flows_eep(const vtss_inst_t inst, 
                                     const vtss_port_no_t ing_port_no, 
                                     const vtss_port_no_t egr_port_no, 
@@ -1471,6 +1614,7 @@ vtss_rc vtss_1588_sample_flows_eep(const vtss_inst_t inst,
 	} while (0);
 }
 
+/* ETH-ETH-IP-PTP Encapsulation */
 vtss_rc vtss_1588_sample_flows_eeip(const vtss_inst_t inst, 
                                     const vtss_port_no_t ing_port_no, 
                                     const vtss_port_no_t egr_port_no, 
@@ -1628,12 +1772,14 @@ vtss_rc vtss_1588_sample_flows_eeip(const vtss_inst_t inst,
 		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_val = 319; 	 /* UDP Dest Port 319/320 */
 		 /* Set dest port mask 0 means any port 0xFFFF means exact match to given port */
 		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_mask = 0xffff;  /* UDP Dest Port Mask	*/
-		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val = 1;		/* UDP Source Port */
-		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_mask = 0xffff; 	  /* UDP Source Port Mask */
+		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val = 0;		/* UDP Source Port */
+		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_mask = 0x0; 	  /* UDP Source Port Mask */
 
-                 printf("Flow: %d  IP1: UDP_dport: %d;   UDP_Sport: %d\n", flow_id,
-		     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_val,
-		     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val);
+                 printf("Flow: %d  IP1: UDP_dport: %d; dportM:0x%04x;  UDP_Sport: %d; SportM: 0x%04x\n", flow_id,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_val,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_mask,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_mask);
 
 		 rc = vtss_phy_ts_ingress_engine_conf_set(inst, ing_port_no, eng_id, flow_conf);
 		 if (rc == VTSS_RC_OK) {
@@ -1655,6 +1801,7 @@ vtss_rc vtss_1588_sample_flows_eeip(const vtss_inst_t inst,
 	} while (0);
 }
 
+/* ETH-MPLS-IP-PTP Encapsulation */
 vtss_rc vtss_1588_sample_flows_emip(const vtss_inst_t inst, 
                                     const vtss_port_no_t ing_port_no, 
                                     const vtss_port_no_t egr_port_no, 
@@ -1796,12 +1943,14 @@ vtss_rc vtss_1588_sample_flows_emip(const vtss_inst_t inst,
 		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_val = 319; 	 /* UDP Dest Port 319/320 */
 		 /* Set dest port mask 0 means any port 0xFFFF means exact match to given port */
 		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_mask = 0xffff;  /* UDP Dest Port Mask	*/
-		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val = 1;		/* UDP Source Port */
-		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_mask = 0xffff; 	  /* UDP Source Port Mask */
+		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val = 0;		/* UDP Source Port */
+		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_mask = 0x0; 	  /* UDP Source Port Mask */
 
-                 printf("Flow: %d  IP1: UDP_dport: %d;   UDP_Sport: %d\n", flow_id,
-		     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_val,
-		     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val);
+                 printf("Flow: %d  IP1: UDP_dport: %d; dportM:0x%04x;  UDP_Sport: %d; SportM: 0x%04x\n", flow_id,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_val,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_mask,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_mask);
 
 		 rc = vtss_phy_ts_ingress_engine_conf_set(inst, ing_port_no, eng_id, flow_conf);
 		 if (rc == VTSS_RC_OK) {
@@ -1826,6 +1975,7 @@ vtss_rc vtss_1588_sample_flows_emip(const vtss_inst_t inst,
 	
 }
 
+/* ETH-MPLS-ETH-PTP Encapsulation */
 vtss_rc vtss_1588_sample_flows_emep(const vtss_inst_t inst, 
                                     const vtss_port_no_t ing_port_no, 
                                     const vtss_port_no_t egr_port_no, 
@@ -1959,6 +2109,7 @@ vtss_rc vtss_1588_sample_flows_emep(const vtss_inst_t inst,
 	
 }
 
+/* ETH-MPLS-ETH-IP-PTP Encapsulation */
 vtss_rc vtss_1588_sample_flows_emeip(const vtss_inst_t inst, 
                                     const vtss_port_no_t ing_port_no, 
                                     const vtss_port_no_t egr_port_no, 
@@ -2129,12 +2280,14 @@ vtss_rc vtss_1588_sample_flows_emeip(const vtss_inst_t inst,
 		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_val = 319; 	 /* UDP Dest Port 319/320 */
 		 /* Set dest port mask 0 means any port 0xFFFF means exact match to given port */
 		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_mask = 0xffff;  /* UDP Dest Port Mask	*/
-		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val = 1;		/* UDP Source Port */
-		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_mask = 0xffff; 	  /* UDP Source Port Mask */
+		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val = 0;		/* UDP Source Port */
+		 flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_mask = 0x0; 	  /* UDP Source Port Mask */
 
-                 printf("Flow: %d  IP1: UDP_dport: %d;   UDP_Sport: %d\n", flow_id,
-		     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_val,
-		     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val);
+                 printf("Flow: %d  IP1: UDP_dport: %d; dportM:0x%04x;  UDP_Sport: %d; SportM: 0x%04x\n", flow_id,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_val,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.dport_mask,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_val,
+                     flow_conf->flow_conf.ptp.ip1_opt.comm_opt.sport_mask);
 
 		 rc = vtss_phy_ts_ingress_engine_conf_set(inst, ing_port_no, eng_id, flow_conf);
 		 if (rc == VTSS_RC_OK) {
@@ -2160,6 +2313,7 @@ vtss_rc vtss_1588_sample_flows_emeip(const vtss_inst_t inst,
 }
 
 
+/* ETH-ETH-OAM Encapsulation */
 vtss_rc vtss_1588_sample_flows_eeoam(const vtss_inst_t inst,
                                   const vtss_port_no_t ing_port_no,
                                   const vtss_port_no_t egr_port_no,
@@ -2293,6 +2447,7 @@ vtss_rc vtss_1588_sample_flows_eeoam(const vtss_inst_t inst,
 }
 
 
+/* ETH-MPLS-ETH-OAM Encapsulation */
 vtss_rc vtss_1588_sample_flows_emeoam(const vtss_inst_t inst,
                                   const vtss_port_no_t ing_port_no,
                                   const vtss_port_no_t egr_port_no,
@@ -2450,6 +2605,7 @@ vtss_rc vtss_1588_sample_flows_emeoam(const vtss_inst_t inst,
 }
 
 
+/* PTP Actions */
 vtss_rc vtss_1588_sample_actions(const vtss_inst_t inst, 
                                  const vtss_port_no_t ing_port_no, 
                                  const vtss_port_no_t egr_port_no,
@@ -2494,12 +2650,20 @@ vtss_rc vtss_1588_sample_actions(const vtss_inst_t inst,
                      delay_type == VTSS_PHY_TS_PTP_DELAYM_E2E ? "DELAY_E2E" : "INVALID DELAY SELECTION"));
 
 	do {
+                /* ALWAYS perform a "Get" before performing modifications and calling a "Set" */
 		rc = vtss_phy_ts_ingress_engine_action_get(inst, ing_port_no, eng_id, ptp_action);
 		if (rc != VTSS_RC_OK) {
 			printf("PHY TS Engine Action_get Failed!\n");
 			break;
 		}
 
+                /* The PTP Actions reflect the pre-defined sequence of operations based upon the clk_mode and delay_type */
+                /* The API fills in the Minimum PTP_ACTIONS for each clk_mode and delay_type */
+                /* As an example:*/
+                /* action_id=0 is the SYNC Packet processing       */
+                /* action_id=1 is the DELAY_REQ Packet processing  */
+                /* action_id=2 is the PDELAY_REQ Packet processing */
+                /* action_id=3 is the PDELAY_RSP Packet processing */
 		ptp_action->action_ptp = TRUE;
 		ptp_action->action.ptp_conf[action_id].enable = TRUE;
 		ptp_action->action.ptp_conf[action_id].channel_map = VTSS_PHY_TS_ENG_FLOW_VALID_FOR_CH0 | VTSS_PHY_TS_ENG_FLOW_VALID_FOR_CH1;
@@ -2552,6 +2716,7 @@ vtss_rc vtss_1588_sample_actions(const vtss_inst_t inst,
 }
 
 
+/* OAM Actions */
 vtss_rc vtss_oam_sample_actions(const vtss_inst_t inst,
                                  const vtss_port_no_t ing_port_no,
                                  const vtss_port_no_t egr_port_no,
@@ -2759,11 +2924,14 @@ vtss_rc vtss_ptp_sample_clock(const vtss_inst_t inst,
 	int start_flow = 0;
 	int end_flow = 1;
 	vtss_phy_ts_encap_t pkt_encap = 0;
-#if 0
-        unsigned char ena_oos_flow7 = 0;
-#endif
-        vtss_phy_ts_fifo_sig_mask_t    sig_mask = VTSS_PHY_TS_FIFO_SIG_SOURCE_PORT_ID | VTSS_PHY_TS_FIFO_SIG_SEQ_ID;
+        unsigned char resv_oos_flow7 = FALSE;
+
+        vtss_phy_ts_fifo_sig_mask_t    sig_mask_min = VTSS_PHY_TS_FIFO_SIG_SOURCE_PORT_ID | VTSS_PHY_TS_FIFO_SIG_SEQ_ID;
+        vtss_phy_ts_fifo_sig_mask_t    sig_mask;
 	
+#ifdef TESLA_ING_TS_ERRFIX
+        resv_oos_flow7 = TRUE;
+#endif
 	memset(&conf, 0, sizeof(vtss_phy_ts_init_conf_t));
 	//memset(&init_conf, 0, sizeof(vtss_phy_ts_eng_init_conf_t));
 
@@ -2820,15 +2988,9 @@ vtss_rc vtss_ptp_sample_clock(const vtss_inst_t inst,
 
         if (((pkt_encap == VTSS_PHY_TS_ENCAP_ETH_PTP) || (pkt_encap == VTSS_PHY_TS_ENCAP_ETH_IP_PTP)) &&
              (numflows == 8)) {                        
-            printf("\nEnabled Flow 7 for OOS Recovery? (Y/N): ");
-            memset (&value_str[0], 0, sizeof(value_str));
-            scanf("%s", &value_str[0]);
-#if 0
-            if (value_str[0] == 'Y' || value_str[0] == 'y') {
-                ena_oos_flow7 = TRUE;
-            }
-            printf("\nEnable ONLY Flow_7: %x \n", ena_oos_flow7);
-#endif
+            printf("\nWARNING: Flow_Id: 7 Appears to be Used by Application and will be Over-Written by OOS Recovery! \n ");
+            printf("WARNING: Flow_Id: 7 Enabling Flow 7 for OOS Recovery \n ");
+            resv_oos_flow7 = TRUE;
         }
 
 #if 0
@@ -2843,8 +3005,6 @@ i### #ifdef _INCLUDE_DEBUG_FILE_PRINT_
                         (ptp_delay_type == VTSS_PHY_TS_PTP_DELAYM_P2P ? "DELAY_P2P" :
                          ptp_delay_type == VTSS_PHY_TS_PTP_DELAYM_E2E ? "DELAY_E2E" : "INVALID DELAY SELECTION"));
 #endif
-
-	
 
 	do {
 		
@@ -2912,24 +3072,45 @@ i### #ifdef _INCLUDE_DEBUG_FILE_PRINT_
 
                 switch (pkt_encap) {
                     case VTSS_PHY_TS_ENCAP_ETH_PTP:
-                        vtss_1588_sample_flows_ep(inst, ing_port_no,egr_port_no, eng_id, numflows, flow_id); 
-#if 0
-                        if (ena_oos_flow7) {
-                            vtss_phy_ts_fifo_sig_set(inst, ing_port_no, sig_mask);
-                            vtss_phy_ts_tesla_conf_analyzer(inst, ing_port_no, eng_id);
+#ifdef TESLA_ING_TS_ERRFIX
+                        rc = vtss_phy_ts_fifo_sig_get(inst, ing_port_no, &sig_mask);
+                        if (sig_mask < sig_mask_min) {
+                            printf ("Src IP address:    VTSS_PHY_TS_FIFO_SIG_SRC_IP          = 0x01 \n");
+                            printf ("Dest IP address:   VTSS_PHY_TS_FIFO_SIG_DEST_IP         = 0x02 \n");
+                            printf ("Msg Type:          VTSS_PHY_TS_FIFO_SIG_MSG_TYPE        = 0x04 \n");
+                            printf ("Domain Number:     VTSS_PHY_TS_FIFO_SIG_DOMAIN_NUM      = 0x08 \n");
+                            printf ("Src Port ID:       VTSS_PHY_TS_FIFO_SIG_SOURCE_PORT_ID  = 0x10 \n");
+                            printf ("PTP Frame Seq ID:  VTSS_PHY_TS_FIFO_SIG_SEQ_ID          = 0x20 \n");
+                            printf ("Dest MAC Addr:     VTSS_PHY_TS_FIFO_SIG_DEST_MAC        = 0x40 \n");
+                            printf ("Note: Signature Masks are OR'd together, so Multiple can be chosen \n\n");
+                            printf ("Port: %d;   Current TS Signatgure Mask: 0x%04x \n", ing_port_no, sig_mask);
+                            printf ("Port: %d;   Minimum TS Signatgure Mask: 0x%04x \n", ing_port_no, sig_mask_min);
+                            printf ("Port: %d;   Forcing Sig_Mask to Min Required: 0x%04x \n", ing_port_no, sig_mask_min);
+                            vtss_phy_ts_fifo_sig_set(inst, ing_port_no, sig_mask_min);
                         }
 #endif
+                        vtss_1588_sample_flows_ep(inst, ing_port_no,egr_port_no, eng_id, numflows, flow_id, resv_oos_flow7);
                         break;
 
                     case VTSS_PHY_TS_ENCAP_ETH_IP_PTP:
-                        vtss_1588_sample_flows_eip(inst, ing_port_no, egr_port_no, eng_id, numflows, flow_id); 
-
-#if 0
-                        if (ena_oos_flow7) {
-                            vtss_phy_ts_fifo_sig_set(inst, ing_port_no, sig_mask);
-                            vtss_phy_ts_tesla_conf_analyzer(inst, ing_port_no, eng_id);
+#ifdef TESLA_ING_TS_ERRFIX
+                        rc = vtss_phy_ts_fifo_sig_get(inst, ing_port_no, &sig_mask);
+                        if (sig_mask < sig_mask_min) {
+                            printf ("Src IP address:    VTSS_PHY_TS_FIFO_SIG_SRC_IP          = 0x01 \n");
+                            printf ("Dest IP address:   VTSS_PHY_TS_FIFO_SIG_DEST_IP         = 0x02 \n");
+                            printf ("Msg Type:          VTSS_PHY_TS_FIFO_SIG_MSG_TYPE        = 0x04 \n");
+                            printf ("Domain Number:     VTSS_PHY_TS_FIFO_SIG_DOMAIN_NUM      = 0x08 \n");
+                            printf ("Src Port ID:       VTSS_PHY_TS_FIFO_SIG_SOURCE_PORT_ID  = 0x10 \n");
+                            printf ("PTP Frame Seq ID:  VTSS_PHY_TS_FIFO_SIG_SEQ_ID          = 0x20 \n");
+                            printf ("Dest MAC Addr:     VTSS_PHY_TS_FIFO_SIG_DEST_MAC        = 0x40 \n");
+                            printf ("Note: Signature Masks are OR'd together, so Multiple can be chosen \n\n");
+                            printf ("Port: %d;   Current TS Signatgure Mask: 0x%04x \n", ing_port_no, sig_mask);
+                            printf ("Port: %d;   Minimum TS Signatgure Mask: 0x%04x \n", ing_port_no, sig_mask_min);
+                            printf ("Port: %d;   Forcing Sig_Mask to Min Required: 0x%04x \n", ing_port_no, sig_mask_min);
+                            vtss_phy_ts_fifo_sig_set(inst, ing_port_no, sig_mask_min);
                         }
 #endif
+                        vtss_1588_sample_flows_eip(inst, ing_port_no, egr_port_no, eng_id, numflows, flow_id, resv_oos_flow7);
                         break;
 
                     case VTSS_PHY_TS_ENCAP_ETH_IP_IP_PTP:
@@ -3075,6 +3256,7 @@ void vtss_basic_secy(vtss_inst_t          inst,
                      BOOL                 encrypt_256
 )
 {
+    vtss_rc    rc = 0;
     //const vtss_macsec_vport_id_t   macsec_virtual_port  = 24193;
     const vtss_macsec_vport_id_t   macsec_virtual_port  = 1;           //jbh
     const vtss_macsec_service_id_t macsec_service_id    = 0;
@@ -3097,7 +3279,21 @@ void vtss_basic_secy(vtss_inst_t          inst,
 
         printf(" Inst: %p, macsec_physical_port: %d, enable: %x\n", inst, macsec_physical_port, init_data.enable);
 
-        VTSS_RC_TEST(vtss_macsec_init_set(inst, macsec_physical_port, &init_data));
+        if ((rc = vtss_macsec_init_set(inst, macsec_physical_port, &init_data)) != VTSS_RC_OK) {
+            printf("vtss_macsec_init_set: rc:%d;  INST: %p; port_no: %d, enable: %x\n", rc, inst, macsec_physical_port, init_data.enable);
+            switch(rc) {
+            case VTSS_RC_OK:
+                break;
+            case VTSS_RC_ERROR:
+                printf("vtss_macsec_init_set: rc:VTSS_RC_ERROR  \n" );
+                break;
+            case VTSS_RC_ERR_MACSEC_NOT_ENABLED:
+                printf("vtss_macsec_init_set: rc:VTSS_RC_ERR_MACSEC_NOT_ENABLED \n" );
+                break;
+            default:
+                printf("vtss_macsec_init_set: ERROR! rc:%d \n", rc);
+            }
+        }
 
         // Use the default rules to drop all non-matched traffic
         // Setup default rules to by-pass traffic classified as control frames
@@ -3110,10 +3306,22 @@ void vtss_basic_secy(vtss_inst_t          inst,
             .egress_non_control                 = VTSS_MACSEC_DEFAULT_ACTION_BYPASS
         };
 
-        VTSS_RC_TEST(vtss_macsec_default_action_set(inst, macsec_physical_port,
-                                                    &default_action_policy));
+        rc = vtss_macsec_default_action_set(inst, macsec_physical_port,
+                                                    &default_action_policy);
 
-        printf(" Default Action Set to VTSS_MACSEC_DEFAULT_ACTION_BYPASS\n");
+        printf(" Default Action Set to VTSS_MACSEC_DEFAULT_ACTION_BYPASS;  rc = %d\n", rc);
+        switch(rc) {
+        case VTSS_RC_OK:
+            break;
+        case VTSS_RC_ERROR:
+            printf("vtss_macsec_default_action_set: rc:VTSS_RC_ERROR  \n" );
+            break;
+        case VTSS_RC_ERR_MACSEC_NOT_ENABLED:
+            printf("vtss_macsec_default_action_set: rc:VTSS_RC_ERR_MACSEC_NOT_ENABLED \n" );
+            break;
+        default:
+            printf("vtss_macsec_default_action_set: ERROR! rc:%d \n", rc);
+        }
     }
 
 
@@ -3159,8 +3367,21 @@ void vtss_basic_secy(vtss_inst_t          inst,
             macsec_port_conf.current_cipher_suite   = VTSS_MACSEC_CIPHER_SUITE_GCM_AES_128;
         }
 
-        VTSS_RC_TEST(vtss_macsec_secy_conf_add(inst, macsec_port, &macsec_port_conf));
-        printf(" New MACSEC Sec_Y Created \n");
+        rc = vtss_macsec_secy_conf_add(inst, macsec_port, &macsec_port_conf);
+        printf(" New MACSEC Sec_Y Created; rc = %d \n", rc);
+        switch(rc) {
+        case VTSS_RC_OK:
+            break;
+        case VTSS_RC_ERROR:
+            printf("vtss_macsec_default_action_set: rc:VTSS_RC_ERROR  \n" );
+            break;
+        case VTSS_RC_ERR_MACSEC_NOT_ENABLED:
+            printf("vtss_macsec_default_action_set: rc:VTSS_RC_ERR_MACSEC_NOT_ENABLED \n" );
+            break;
+        default:
+            printf("vtss_macsec_default_action_set: ERROR! rc:%d \n", rc);
+        }
+
 
 /*  *************************************************************************************************** */
 /*                               CONTROLLED PORT SETUP - EGRESS                                         */
@@ -3185,10 +3406,10 @@ void vtss_basic_secy(vtss_inst_t          inst,
         };
 
 
-        VTSS_RC_TEST(vtss_macsec_pattern_set(inst, macsec_port, VTSS_MACSEC_DIRECTION_EGRESS,
-                                                   VTSS_MACSEC_MATCH_ACTION_CONTROLLED_PORT, &pattern_ctrl_egr));
+        rc = vtss_macsec_pattern_set(inst, macsec_port, VTSS_MACSEC_DIRECTION_EGRESS,
+                                                   VTSS_MACSEC_MATCH_ACTION_CONTROLLED_PORT, &pattern_ctrl_egr);
 
-        printf(" EGRESS CTRL Pattern Set Complete - Pattern Match Set to: VTSS_MACSEC_MATCH_ETYPE = 0800 \n");
+        printf(" EGRESS CTRL Pattern Set Complete - Pattern Match Set to: VTSS_MACSEC_MATCH_ETYPE = 0800; rc=%d\n", rc);
 
 
 
@@ -3216,10 +3437,10 @@ void vtss_basic_secy(vtss_inst_t          inst,
 
 
         // Associate the pattern with the controlled MACsec port
-        VTSS_RC_TEST(vtss_macsec_pattern_set(inst, macsec_port, VTSS_MACSEC_DIRECTION_INGRESS,
-                                                   VTSS_MACSEC_MATCH_ACTION_CONTROLLED_PORT, &pattern_ctrl_ingr));
+        rc = vtss_macsec_pattern_set(inst, macsec_port, VTSS_MACSEC_DIRECTION_INGRESS,
+                                                   VTSS_MACSEC_MATCH_ACTION_CONTROLLED_PORT, &pattern_ctrl_ingr);
 
-        printf(" INGRESS CTRL Pattern Set Complete - Pattern Match Set to: VTSS_MACSEC_MATCH_ETYPE = 88e5 \n");
+        printf(" INGRESS CTRL Pattern Set Complete - Pattern Match Set to: VTSS_MACSEC_MATCH_ETYPE = 88e5 ; rc=%d\n", rc);
 
 
 /*  *************************************************************************************************** */
@@ -3243,12 +3464,12 @@ void vtss_basic_secy(vtss_inst_t          inst,
         };
 
         // Associate the pattern with the uncontrolled MACsec port
-        VTSS_RC_TEST(vtss_macsec_pattern_set(inst, macsec_port,
+        rc = vtss_macsec_pattern_set(inst, macsec_port,
                                              VTSS_MACSEC_DIRECTION_INGRESS,
                                              VTSS_MACSEC_MATCH_ACTION_UNCONTROLLED_PORT,
-                                             &pattern_unctrl_ingr));
+                                             &pattern_unctrl_ingr);
 
-        printf(" INGRESS UNCONTROLLED Pattern Set Complete - Pattern Match Set to: VTSS_MACSEC_MATCH_ETYPE = 888e \n");
+        printf(" INGRESS UNCONTROLLED Pattern Set Complete - Pattern Match Set to: VTSS_MACSEC_MATCH_ETYPE = 888e; rc=%d \n", rc);
 
 /*  *************************************************************************************************** */
 /*                               UNCONTROLLED PORT SETUP - EGRESS                                       */
@@ -3268,16 +3489,15 @@ void vtss_basic_secy(vtss_inst_t          inst,
             .dest_mac            = peer_macaddress
         };
 
-        VTSS_RC_TEST(vtss_macsec_pattern_set(inst, macsec_port,
-                                             VTSS_MACSEC_DIRECTION_EGRESS,
-                                             VTSS_MACSEC_MATCH_ACTION_UNCONTROLLED_PORT,
-                                             &pattern_unctrl_egr));
+        rc = vtss_macsec_pattern_set(inst, macsec_port,
+                                     VTSS_MACSEC_DIRECTION_EGRESS, VTSS_MACSEC_MATCH_ACTION_UNCONTROLLED_PORT,
+                                     &pattern_unctrl_egr);
 
-        printf(" EGRESS UNCONTROLLED Pattern Set Complete - Pattern Match Set to: VTSS_MACSEC_MATCH_ETYPE = 888e \n");
+        printf(" EGRESS UNCONTROLLED Pattern Set Complete - Pattern Match Set to: VTSS_MACSEC_MATCH_ETYPE = 888e;  rc=%d \n", rc);
 
         // Enable the SecY
-        VTSS_RC_TEST(vtss_macsec_secy_controlled_set(inst, macsec_port, TRUE));
-        printf(" Enable Sec_Y \n");
+        rc = vtss_macsec_secy_controlled_set(inst, macsec_port, TRUE);
+        printf(" Enable Sec_Y; rc=0x%x \n",rc);
     }
 
     memcpy(in_macsec_port,     &macsec_port,     sizeof macsec_port);
@@ -3295,6 +3515,7 @@ void vtss_single_secy_sample_system_create(vtss_inst_t          inst,
                                            BOOL                 confidentiality
 )
 {
+    vtss_rc   rc = 0;
     const vtss_mac_t peer_macaddress = { .addr = {0, 0, 0, 0, 0, 0xBB}};
     const vtss_port_no_t macsec_physical_port = port_no;
     vtss_macsec_sci_t sci_rx;
@@ -3347,7 +3568,8 @@ void vtss_single_secy_sample_system_create(vtss_inst_t          inst,
         vtss_macsec_sak_t sak_tx_sa_0;
 
         // Add a new TX secure channel
-        VTSS_RC_TEST(vtss_macsec_tx_sc_set(inst, *macsec_port));
+        rc = vtss_macsec_tx_sc_set(inst, *macsec_port);
+        printf("vtss_macsec_tx_sc_set:  rc: %d \n", rc);
 
         if (encrypt_256) {
             // create a zero-key for 256bit cipher suite
@@ -3358,7 +3580,8 @@ void vtss_single_secy_sample_system_create(vtss_inst_t          inst,
         }
 
         // Update the hash key in the SAK before the key is installed in HW
-        VTSS_RC_TEST(sak_update_hash_key(&sak_tx_sa_0));
+        rc = sak_update_hash_key(&sak_tx_sa_0);
+        printf("sak_update_hash_key  rc: %d \n", rc);
 
         if ((sak_tx_sa_0.len == 16) || (sak_tx_sa_0.len == 32)) {
             printf ("SAK: Buff[0-15]: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n",
@@ -3383,27 +3606,29 @@ void vtss_single_secy_sample_system_create(vtss_inst_t          inst,
         // install the key in HW on the egress side
 
         // install the key in HW on the egress side
-        VTSS_RC_TEST(vtss_macsec_tx_sa_set(inst, *macsec_port,
+        rc = vtss_macsec_tx_sa_set(inst, *macsec_port,
                                            assoc_no,        // associations number
                                            next_pn,         // next_pn,
                                            confidentiality, // confidentiality,
-                                           &sak_tx_sa_0));
+                                           &sak_tx_sa_0);
 
         // install the key in HW on the egress side
-        printf("Activiating Key on HW Egress: Port_No: %d, Vir_Port_No: %d, Assoc_No: %d, Next_PN: 0x%x, Service_Id: 0x%x, confid: 0x%x \n",
-                   macsec_port->port_no, macsec_port->port_id, assoc_no, next_pn, macsec_port->service_id, confidentiality );
+        printf("Activiating Key on HW Egress: rc; %d; Port_No: %d, Vir_Port_No: %d, Assoc_No: %d, Next_PN: 0x%x, Service_Id: 0x%x, confid: 0x%x \n",
+                   rc, macsec_port->port_no, macsec_port->port_id, assoc_no, next_pn, macsec_port->service_id, confidentiality );
 
-        VTSS_RC_TEST(vtss_macsec_tx_sa_activate(inst, *macsec_port, assoc_no));
+        rc = vtss_macsec_tx_sa_activate(inst, *macsec_port, assoc_no);
     }
 
-    printf("INGRESS SETUP: Installing Key on HW on Ingress Side \n");
+    printf("INGRESS SETUP: Installing Key on HW on Ingress Side;  rc=%d \n", rc);
+
     { // Add a MACsec peer
         vtss_macsec_sak_t sak_rx_sa_0;
         vtss_macsec_sak_t sak_rx_sa_1;
 
       // Add a new RX secure channel
       //  printf("Adding MACsec Peer\n");
-        VTSS_RC_TEST(vtss_macsec_rx_sc_add(inst, *macsec_port, &sci_rx));
+        rc = vtss_macsec_rx_sc_add(inst, *macsec_port, &sci_rx);
+        printf("vtss_macsec_rx_sc_add;  rc=%d \n", rc);
 
         // Add two RX SA's
         if (encrypt_256) {
@@ -3417,8 +3642,10 @@ void vtss_single_secy_sample_system_create(vtss_inst_t          inst,
 
         // Update the hash key in the SAK before the key is installed in HW
         printf("Adding Two Hashes - Secure Association 0 and 1 \n");
-        VTSS_RC_TEST(sak_update_hash_key(&sak_rx_sa_0));
-        VTSS_RC_TEST(sak_update_hash_key(&sak_rx_sa_1));
+        rc = sak_update_hash_key(&sak_rx_sa_0);
+        printf("sak_update_hash_key; sak_rx_sa_0;  rc: %d \n", rc);
+        rc = sak_update_hash_key(&sak_rx_sa_1);
+        printf("sak_update_hash_key; sak_rx_sa_1;  rc: %d \n", rc);
 
         printf("Setup Key_0: Activating Key on HW on Ingress Side - Assoc: 0\n");
         //printf("SA Set \n");
@@ -3452,12 +3679,16 @@ void vtss_single_secy_sample_system_create(vtss_inst_t          inst,
         assoc_no = 0;      // Assn Number
         lowest_pn = 0;     // Lowest Pkt Num
         printf("Setting up RX sa_0 Assoc_No: %d, lowest_pn: %d \n", assoc_no, lowest_pn);
-        VTSS_RC_TEST(vtss_macsec_rx_sa_set(inst, *macsec_port,
+        rc = vtss_macsec_rx_sa_set(inst, *macsec_port,
                                            &sci_rx, // identify which SC the SA belongs to
                                            assoc_no,       // associations number
                                            lowest_pn,       // lowest_pn,
-                                           &sak_rx_sa_0));
-        VTSS_RC_TEST(vtss_macsec_rx_sa_activate(inst, *macsec_port, &sci_rx, assoc_no));
+                                           &sak_rx_sa_0);
+
+        printf("vtss_macsec_rx_sa_set  rc: %d \n", rc);
+
+        rc = vtss_macsec_rx_sa_activate(inst, *macsec_port, &sci_rx, assoc_no);
+        printf("vtss_macsec_rx_sa_activate   rc: %d \n", rc);
 
         // install the key in HW on the egress side
         printf("Activiating Key_0 on HW Inress: Port_No: %d, Vir_Port_No: %d, Assoc_No: %d, Lowest_PN: 0x%x, SCI: 0x%x:0x%x:0x%x:0x%x:0x%x:0x%x - 0x%x \n",
@@ -3492,15 +3723,17 @@ void vtss_single_secy_sample_system_create(vtss_inst_t          inst,
         assoc_no = 1;         // Assn Number
        lowest_pn = 0x2000000;     // Lowest Pkt Num
         //printf("sa_1 Assoc_No: %d, lowest_pn: %d \n", assoc_no, lowest_pn);
-        VTSS_RC_TEST(vtss_macsec_rx_sa_set(inst, *macsec_port,
+        rc = vtss_macsec_rx_sa_set(inst, *macsec_port,
                                            &sci_rx,      // identify which SC the SA belongs to
                                            assoc_no,     // associations number
                                            lowest_pn,    // lowest_pn,
-                                           &sak_rx_sa_1));
+                                           &sak_rx_sa_1);
 
+        printf("vtss_macsec_rx_sa_set  rc: %d \n", rc);
 
-        VTSS_RC_TEST(vtss_macsec_rx_sa_activate(inst, *macsec_port, &sci_rx, assoc_no));
+        rc = vtss_macsec_rx_sa_activate(inst, *macsec_port, &sci_rx, assoc_no);
 
+        printf("vtss_macsec_rx_sa_activate;  rc= %d \n", rc);
         printf("Activiating Key_1 on HW Inress: Port_No: %d, Vir_Port_No: %d, Assoc_No: %d, Lowest_PN: 0x%x, SCI: 0x%x:0x%x:0x%x:0x%x:0x%x:0x%x - 0x%x \n",
                    macsec_port->port_no, macsec_port->port_id, assoc_no, lowest_pn, sci_rx.mac_addr.addr[0], sci_rx.mac_addr.addr[1],
                    sci_rx.mac_addr.addr[2], sci_rx.mac_addr.addr[3], sci_rx.mac_addr.addr[4], sci_rx.mac_addr.addr[5], sci_rx.port_id );
@@ -3514,15 +3747,17 @@ void vtss_basic_secy_destroy(
     const vtss_macsec_port_t *macsec_port
 )
 {
+    vtss_rc   rc = 0;
     // Delete SecY
     printf(" calling vtss_macsec_secy_conf_del \n");
-    VTSS_RC_TEST(vtss_macsec_secy_conf_del(inst, *macsec_port));
+    rc = vtss_macsec_secy_conf_del(inst, *macsec_port);
+    printf(" calling vtss_macsec_secy_conf_del: rc:0x%x \n", rc);
 
     // Disable the MACsec block
     printf(" calling vtss_macsec_init_set,  Enable=False \n");
     vtss_macsec_init_t deinit_data = { .enable = FALSE };
-    VTSS_RC_TEST(vtss_macsec_init_set(inst, macsec_port->port_no,
-                                      &deinit_data));
+    rc = vtss_macsec_init_set(inst, macsec_port->port_no, &deinit_data);
+    printf(" calling vtss_macsec_init_set: rc:%d \n", rc);
 }
 
 
@@ -4026,6 +4261,9 @@ int main(int argc, const char **argv) {
     vtss_phy_conf_1g_t      phy_1g;
     vtss_phy_reset_conf_t   phy_reset;
     vtss_init_conf_t        init_conf;
+    vtss_phy_conf_t         phy_ws;
+    vtss_phy_conf_1g_t      phy_1g_ws;
+    vtss_phy_reset_conf_t   phy_reset_ws;
     vtss_phy_loopback_t     loopback;
     vtss_port_interface_t   mac_if;
     vtss_phy_media_interface_t media_if;
@@ -4253,6 +4491,10 @@ int main(int argc, const char **argv) {
     phy.forced.fdx = 1;
 
     phy.mdi = VTSS_PHY_MDIX_AUTO; // always enable auto detection of crossed/non-crossed cables
+
+    phy.force_ams_sel = VTSS_PHY_MEDIA_FORCE_AMS_SELECTION_SERDES; // FORCE PHY AMS Media Selection to always be SERDES
+    phy.force_ams_sel = VTSS_PHY_MEDIA_FORCE_AMS_SELECTION_COPPER; // FORCE PHY AMS Media Selection to always be COPPER
+    phy.force_ams_sel = VTSS_PHY_MEDIA_FORCE_AMS_SELECTION_NORMAL; // Let PHY Determine Media Selection based on Link Status
 
     phy.flf = VTSS_PHY_FAST_LINK_FAIL_DISABLE;
     phy.flf = VTSS_PHY_FAST_LINK_FAIL_ENABLE;
@@ -4990,6 +5232,25 @@ int main(int argc, const char **argv) {
             printf ("ALL MEDIA mode defaulted to: UNKNOWN \n");
         }
 
+        printf ("\n\nAre Default AMS Force Settings for ALL Ports Ok ? (Y/N)  \n");
+        memset (&value_str[0], 0, sizeof(value_str));
+        scanf("%s", &value_str[0]);
+
+        if (value_str [0] == 'n' || value_str [0] == 'N' ) {
+            printf ("Enter Default  FORCE_AMS_SELECTION for ALL Ports to:   0=Normal AMS/1=Force SerDes/2=Force Copper\n");
+            memset (&value_str[0], 0, sizeof(value_str));
+            scanf("%s", &value_str[0]);
+            if (value_str [0] == '0') {
+                phy.force_ams_sel = VTSS_PHY_MEDIA_FORCE_AMS_SELECTION_NORMAL;
+            } else  if (value_str [0] == '1') {
+                phy.force_ams_sel = VTSS_PHY_MEDIA_FORCE_AMS_SELECTION_SERDES;
+            } else  if (value_str [0] == '2') {
+                phy.force_ams_sel = VTSS_PHY_MEDIA_FORCE_AMS_SELECTION_COPPER;
+            } else {
+                phy.force_ams_sel = VTSS_PHY_MEDIA_FORCE_AMS_SELECTION_NORMAL;
+            }
+        }
+
         // Do PHY port reset + Port setup
     if (skip_to_main_menu == FALSE) {
         printf ("//Comment: PHY port reset\n");
@@ -5049,6 +5310,10 @@ int main(int argc, const char **argv) {
 
             prev_mode[port_no] = phy.mode;
         }
+
+        phy_ws = phy;  /* struct used for vtss_phy_conf_set */
+        phy_1g_ws = phy_1g;  /* struct used for vtss_phy_conf_1g_set  */
+        phy_reset_ws = phy_reset;  /* struct used for vtss_phy_reset */
 
 #if 0
 #if defined (NANO_EVAL_BOARD)
@@ -5126,7 +5391,7 @@ _exit:
 #ifdef _INCLUDE_DEBUG_TERM_PRINT_
             printf (" debug  <port_no>  - Sets PHY API to output Debug \n");
 #endif
-            printf (" dump <port_no> - Dump Reg 0-31 Pages:std/ext1/ext2/ext3/gpio/1588/macsec/1588_rng/macsec_rng/ext_rng for Port \n");
+            printf (" dump <port_no> - Dump Reg 0-31 Pages:std/ext1/ext2/ext3/gpio/1588/macsec/1588_reg/macsec_rng/ext_rng for Port \n");
             printf (" rdext <port_no> <page> <addr> - Read Extended Page - where page=1,2,3,4,0x10,0x1588,0x2A30,0x52B5 - <addr> 0-31 \n");
             printf (" wrext <port_no> <page> <addr> <value> - Write Ext Page - page=1,2,3,4,0x10,0x1588,0x2A30,0x52B5 - <addr> 0-31 - Value MUST be in hex \n");
             printf (" ----------------------------------------  |  ------------------------------------------------------- \n");
@@ -5192,7 +5457,7 @@ _exit:
             printf ("         macsec - Dump MACSec Page Reg for port\n");
             printf ("           test - Dump TEST Page Reg for port\n");
             printf ("             tr - Dump Token Ring Page Reg for port\n");
-            printf ("       1588_rng - Dump Range of Registers for 1588 Page for port\n");
+            printf ("       1588_reg - Dump Range of Registers for 1588 Page for port\n");
             printf ("    macseci_rng - Dump Range of Registers for MACSec Page for port\n");
             printf ("        ext_rng - Dump Range of Registers for Desired Ext Page for port\n");
             printf (" status <port_no>  - Return PHY API status \n");
@@ -5278,11 +5543,12 @@ _exit:
         } else if (strcmp(command, "dump")  == 0) {
             BOOL     print_hdr = TRUE;
             u32      page_no = 0;
+            vtss_debug_info_t  dbg_info;
 
             if (get_valid_port_no(&port_no, port_no_str) == FALSE) {
                 continue;
             }
-            printf ("Port %d, Enter Page(std/ext1/ext2/ext3/gpio/1588/macsec/test/tr/1588_rng/macsec_rng/ext_rng) \n", port_no);
+            printf ("Port %d, Enter Page(std/ext1/ext2/ext3/gpio/1588/macsec/test/tr/1588_reg/macsec_rng/ext_rng) \n", port_no);
             memset (&value_str[0], 0, sizeof(value_str));
             scanf("%s", &value_str[0]);
 
@@ -5302,8 +5568,21 @@ _exit:
                 page_no = VTSS_PHY_PAGE_GPIO;
                 vtss_phy_debug_regdump_print(board->inst, (vtss_debug_printf_t) printf, port_no, page_no, print_hdr);
             } else if (strcmp(value_str, "1588")  == 0) {
+                int i;
                 page_no = VTSS_PHY_PAGE_1588;
-                vtss_phy_debug_regdump_print(board->inst, (vtss_debug_printf_t) printf, port_no, page_no, print_hdr);
+                printf("Dumping 1588 Page\n");
+                memset (&dbg_info, 0, sizeof(vtss_debug_info_t));
+                vtss_debug_info_get (&dbg_info); /* This turns on ALL Ports in port list */
+                for (i=0; i<VTSS_PORT_ARRAY_SIZE; i++) {
+                    dbg_info.port_list[i] = 0;
+                }
+                dbg_info.port_list[port_no] = 1;
+                dbg_info.layer = VTSS_DEBUG_LAYER_ALL;
+                //dbg_info.group = VTSS_DEBUG_GROUP_PHY;
+                //dbg_info.group = VTSS_DEBUG_GROUP_TS;
+                dbg_info.group = VTSS_DEBUG_GROUP_PHY_TS;
+                dbg_info.full = 1;
+                rc = vtss_debug_info_print(board->inst, (vtss_debug_printf_t) printf, &dbg_info);
             } else if (strcmp(value_str, "macsec")  == 0) {
                 page_no = VTSS_PHY_PAGE_MACSEC;
 #ifdef VTSS_FEATURE_MACSEC
@@ -5327,27 +5606,22 @@ _exit:
                 rc = vtss_phy_read_tr_addr(board->inst, port_no, reg16, &reg17, &reg18);
                 printf ("Port %d, TR Address (Reg16): 0x%04x,  Upper(Reg18): 0x%04x, Lower(Reg17): 0x%04x;    rc= 0x%x \n", port_no, reg16, reg18, reg17, rc);
 
-            } else if (strcmp(value_str, "1588_rng")  == 0) {
-                u16  start_reg = 0;
-                u16  end_reg = 0;
-
-                printf("1588v2 Page Register dump for port %d \n", port_no);
-                printf ("Port %d, Enter Start Reg# (MUST be in Hex): ", port_no);
-                memset (&value_str[0], 0, sizeof(value_str));
-                scanf("%s", &value_str[0]);
-                start_reg = strtol(value_str, NULL, 16);
-                printf ("Port %d, Enter Ending Reg# (MUST be in Hex): ", port_no);
-                memset (&value_str[0], 0, sizeof(value_str));
-                scanf("%s", &value_str[0]);
-                end_reg = strtol(value_str, NULL, 16);
-
-                miim_write(board->inst, port_no, 31, VTSS_PHY_PAGE_1588);  /* 1588 Page  */
-                for (addr = start_reg; addr < (end_reg + 1); addr++) {
-                    miim_read(board->inst, port_no, addr, &value);
-                    printf("0x%04xv2: 0x%04X \n", addr, value);
+            } else if (strcmp(value_str, "1588_reg")  == 0) {
+                int i;
+                page_no = VTSS_PHY_PAGE_1588;
+                printf("Dumping 1588 Page\n");
+                memset (&dbg_info, 0, sizeof(vtss_debug_info_t));
+                vtss_debug_info_get (&dbg_info);
+                for (i=0; i<VTSS_PORT_ARRAY_SIZE; i++) {
+                    dbg_info.port_list[i] = 0;
                 }
-                miim_write(board->inst, port_no, 31, VTSS_PHY_PAGE_STANDARD);  /* Std Page 0 */
-
+                dbg_info.port_list[port_no] = 1;
+                dbg_info.layer = VTSS_DEBUG_LAYER_ALL;
+                //dbg_info.group = VTSS_DEBUG_GROUP_PHY;
+                //dbg_info.group = VTSS_DEBUG_GROUP_TS;
+                dbg_info.group = VTSS_DEBUG_GROUP_PHY_TS;
+                dbg_info.full = 1;
+                rc = vtss_debug_info_print(board->inst, (vtss_debug_printf_t) printf, &dbg_info);
             } else if (strcmp(value_str, "macsec_rng")  == 0) {
                 u16  start_reg = 0;
                 u16  end_reg = 0;
@@ -6606,7 +6880,16 @@ _exit:
 #endif  // End of EEE
 #ifdef  EVAL_BOARD_1588_CAPABLE    // 1588 and MACSec get #ifdef'd because they are completely seperate Modules, not in vtss_phy.c
         } else if (strcmp(command, "1588") == 0) {
-            vtss_phy_ts_engine_t  eng_id = 0;
+#ifdef TESLA_ING_TS_ERRFIX
+            BOOL OOS = FALSE;
+            vtss_phy_ts_fifo_conf_t   fifo_conf = {.detect_only = FALSE,
+                                                   .eng_recov = VTSS_PHY_TS_PTP_ENGINE_ID_0,
+                                                   .eng_minE = VTSS_PHY_TS_OAM_ENGINE_ID_2B
+                                                   };
+#endif
+            vtss_phy_ts_engine_t           eng_id = 0;
+            vtss_phy_ts_fifo_sig_mask_t    sig_mask=0;
+
 
           while(1) {
 #ifdef _INCLUDE_DEBUG_FILE_PRINT_
@@ -6625,11 +6908,12 @@ _exit:
             printf (" ptp_arm_set <port_no> - Set the PHY timestamp in seconds and nanoseconds \n");
             printf (" arm_set_done <port_no> - Set the PHY timestamp \n");
             printf (" ptp_load   <port_no> - Get the PHY PTP load time in seconds and nanoseconds \n");
-            printf (" sig_get    <port_no> - Get TS Signature Bytes  \n");
-            printf (" sig_set    <port_no> - Set TS Signature Bytes  \n");
             printf (" cb_install <port_no> - Install Call-back to read FIFO \n");
             printf (" read_fifo  <port_no> - Reads the FIFO until empty and then Executes the FIFO Read Call-back \n");
             printf (" ts_reg_dump  <port_no> - Dump 1588 Registers\n");
+            printf (" sig_get    <port_no> - Get TS Signature Bytes  \n");
+            printf (" sig_set    <port_no> - Set TS Signature Bytes  \n");
+            printf (" run_oos    <port_no> - Run the Tesla OOS Recovery via Direct API Call \n");
             printf (" x - exit             - Exit to upper level menu\n");
             printf ("> ");
             rc = scanf("%s", &command[0]);
@@ -6742,7 +7026,10 @@ _exit:
                     continue;
                 }
 
-#ifdef VTSS_TS_DEBUG_REG_DUMP
+#define ENABLE_1588_DEBUG_REG_READ_DEMO
+#ifdef ENABLE_1588_DEBUG_REG_READ_DEMO
+                vtss_debug_printf_t pr=(vtss_debug_printf_t) printf;
+
                 ing_port_no = port_no;
                 printf ("Ingress Port %d \n", port_no);
                 printf ("\nPlease Enter Egress Port: ");
@@ -6751,17 +7038,14 @@ _exit:
                 egr_port_no = atoi(value_str);
 				
 		printf("\n\n Register Dump:\n\n");
-		rc = vtss_phy_1588_debug_reg_read(board->inst,ing_port_no, 0);
-		rc = vtss_phy_1588_debug_reg_read(board->inst,ing_port_no, 4);
-		rc = vtss_phy_1588_debug_reg_read(board->inst,ing_port_no, 5);
-		rc = vtss_phy_1588_debug_reg_read(board->inst,ing_port_no, 6);
-		rc = vtss_phy_1588_debug_reg_read(board->inst,ing_port_no, 7);
-		printf("\n\n Register Dump:\n\n");
-		rc = vtss_phy_1588_debug_reg_read(board->inst,egr_port_no, 1);
-		rc = vtss_phy_1588_debug_reg_read(board->inst,egr_port_no, 4);
-		rc = vtss_phy_1588_debug_reg_read(board->inst,egr_port_no, 5);
-		rc = vtss_phy_1588_debug_reg_read(board->inst,egr_port_no, 6);
-		rc = vtss_phy_1588_debug_reg_read(board->inst,egr_port_no, 7);
+		rc = vtss_phy_1588_debug_reg_read(board->inst,ing_port_no, 0, pr);
+		rc = vtss_phy_1588_debug_reg_read(board->inst,egr_port_no, 1, pr);
+		rc = vtss_phy_1588_debug_reg_read(board->inst,ing_port_no, 2, pr);
+		rc = vtss_phy_1588_debug_reg_read(board->inst,egr_port_no, 3, pr);
+		rc = vtss_phy_1588_debug_reg_read(board->inst,ing_port_no, 4, pr);
+		rc = vtss_phy_1588_debug_reg_read(board->inst,ing_port_no, 5, pr);
+		rc = vtss_phy_1588_debug_reg_read(board->inst,ing_port_no, 6, pr);
+		rc = vtss_phy_1588_debug_reg_read(board->inst,ing_port_no, 7, pr);
 #endif
 		continue;
 
@@ -7064,6 +7348,53 @@ _exit:
 
                 continue;
 
+#ifdef TESLA_ING_TS_ERRFIX
+
+           } else if (strcmp(command, "run_oos") == 0) {
+                vtss_rc                 rc;
+                if (get_valid_port_no(&port_no, port_no_str) == FALSE) {
+                    continue;
+                }
+
+                /* Note: fifo_conf declared at beginning of 1588 sub-section !! */
+
+#ifdef _INCLUDE_DEBUG_FILE_PRINT_
+                fprintf (fp,"PHY_Start_of_OOS\n");
+#endif
+                rc = vtss_phy_ts_fifo_sig_get(board->inst, port_no, &sig_mask);
+                printf("Sig_Mask: 0x%04x  for port %d\n", sig_mask, port_no);
+                if (sig_mask < 0x30) {
+                    printf("Sig_Mask is not compatable for OOS::FORCING Sig_Mask = 0x30 for port %d\n", port_no);
+                    printf("This Over-ride is ONLY for Manually Calling/Testing of OOS Patch! Port_no:%d\n", port_no);
+                    printf("Minimum Sig_Mask: VTSS_PHY_TS_FIFO_SIG_SOURCE_PORT_ID | VTSS_PHY_TS_FIFO_SIG_SEQ_ID\n");
+                    sig_mask = VTSS_PHY_TS_FIFO_SIG_SOURCE_PORT_ID | VTSS_PHY_TS_FIFO_SIG_SEQ_ID; // 0x30
+                    rc = vtss_phy_ts_fifo_sig_set(board->inst, port_no, sig_mask);
+                }
+
+                //fifo.eng_recov = VTSS_PHY_TS_PTP_ENGINE_ID_0;
+                //fifo.eng_minE = VTSS_PHY_TS_OAM_ENGINE_ID_2B;
+                printf ("Select Primary OOS Recovery Engine (Default: 0): Enter 0/1 for port  %d :", port_no);
+                memset (&value_str[0], 0, sizeof(value_str));
+                scanf("%s", &value_str[0]);
+                if (value_str[0] == '1') {
+                    fifo_conf.eng_recov = VTSS_PHY_TS_PTP_ENGINE_ID_1;
+                }
+
+               /* Reason for calling twice with engine-id is due to fact that API returns 'VTSS_RC_ERROR'
+               only in case of OOS recovery failure and 'VTSS_RC_OK' is returned even in case of incomplete
+               API execution. There is a chance of PTP-IP-ETH enabled on engine-1 & different encapsulation on
+               engine 0 and it must be allowed to test in API. */
+                if (vtss_phy_ts_tesla_tsp_fifo_sync(board->inst, port_no,(vtss_debug_printf_t)printf, &fifo_conf, &OOS) != VTSS_RC_OK) {
+                    printf("\nERROR: FIFO sync API returned pre-maturely for port %d\n", port_no);
+                } else {
+                    printf("\nFIFO sync API returned VTSS_RC_OK for port %d\n", port_no);
+                }
+
+#ifdef _INCLUDE_DEBUG_FILE_PRINT_
+                fprintf (fp,"PHY_END_of_OOS\n");
+#endif
+                continue;
+#endif  /* TESLA_ING_TS_ERRFIX */
             } else {
                 continue;
             }
@@ -7141,6 +7472,7 @@ _exit:
                 }
 
                 rc = vtss_macsec_init_set(board->inst, port_no, &init_data);
+                printf("vtss_macsec_init_set: rc:0x%x;  INST: %p; port_no: %d, enable: %x\n", rc, board->inst, port_no, init_data.enable);
 
                 continue;
 
@@ -8195,30 +8527,36 @@ _exit:
                 vtss_phy_conf_1g_get(board->inst, prt, &conf_1g[prt]);
                 vtss_phy_power_conf_get(board->inst, prt, &pwr_conf[prt]);
                 vtss_phy_event_enable_get(board->inst, prt, &ev_mask[prt]);
+
+                /* if OOS Recovery exitted early, need to modify the configs back to original */
+                /* The config_get functions will return the existing OOS Config, which is wrong */
+                reset_conf[prt] = phy_reset_ws;
+                phy_setup[prt] = phy_ws;
+                conf_1g[prt] = phy_1g_ws;
             }
 
             vtss_phy_clock_conf_get(board->inst, port_no, VTSS_PHY_RECOV_CLK1, &clk_conf[VTSS_PHY_RECOV_CLK1], &clk_source[VTSS_PHY_RECOV_CLK1]);
             vtss_phy_clock_conf_get(board->inst, port_no, VTSS_PHY_RECOV_CLK2, &clk_conf[VTSS_PHY_RECOV_CLK2], &clk_source[VTSS_PHY_RECOV_CLK2]);
 
+
             vtss_restart_conf_get(board->inst, &warm_restart);
             printf ("<<< Warm-Start1 >>> Getting warm_restart Instance1: %p \n", board->inst);
-            warm_restart = VTSS_RESTART_WARM;
-            init_conf.restart_info_port = port_no;
+            init_conf.restart_info_port = 0;
             init_conf.warm_start_enable = TRUE;
             init_conf.restart_info_src = VTSS_RESTART_INFO_SRC_CU_PHY;
             /* This sets the warmstart information in the Instance */
             vtss_init_conf_set(board->inst, &init_conf);
             /* This sets the EPG Values in the Chip to be read after warmstart */
-            vtss_restart_conf_set(board->inst, warm_restart);
+            vtss_restart_conf_set(board->inst, VTSS_RESTART_WARM);
             printf ("<<< Warm-Start1 >>> Setting Initial Instance1: %p;   warm_restart: 0x%x\n", board->inst, warm_restart);
 
             /* Destroy the previously allocated Instance (free vtss_state);  This is POST CPU/SW Reset */
             vtss_inst_destroy(board->inst); // Note: This is only performed for DEMO Application sequence to free up previously allocated memory
+            board->inst = 0;
+            printf ("<<< Warm-Start1 Instance Destroyed >>> \n");
 
             // In this case we only have one board. Assign point to the board definition
             board = &board_table[0];
-            memset (&board_table[0], 0, (sizeof(vtss_appl_board_t) * MAX_BOARD_INSTANCES));
-            printf ("<<< Warm-Start1 Instance Destroyed >>> PHY Configured and Ready for CPU/Software Update \n");
 
             // Initialize
             vtss_board_phy_init(board);
@@ -8228,19 +8566,56 @@ _exit:
             // Create the Instance (malloc vtss_state);  This is POST CPU/SW Reset
             vtss_inst_create(&create, &board->inst);
             // Setup the init_conf pointer to the allocated space within instance
-            vtss_init_conf_get(board->inst, &init_conf);
+            vtss_init_conf_get(board->inst, &init_conf); //*conf = vtss_state->init_conf;
+            printf ("<<< Warm-Start2 Instance Created >>> PHY Configured and Ready for CPU/Software Update PHY_INST2: %p \n", board->inst);
+
 
             // setup Board Support Pkg to point to the allocated space within the instance for accessor functions
             // Must be done prior to board_init()
-            board->init.init_conf = &init_conf;
 
-            init_conf.restart_info_port = port_no;
+            init_conf.restart_info_port = 0;
             init_conf.warm_start_enable = TRUE;
             init_conf.restart_info_src = VTSS_RESTART_INFO_SRC_CU_PHY;
+            //board->init.init_conf->warm_start_enable 
 
-            // setup Board Support Pkg to point to the allocated space within the instance for accessor functions
-            // Must be done prior to board_init()
-            printf ("<<< Warm-Start2 >>> Creating Instance2: %p  \n", board->inst);
+            board->init.init_conf = &init_conf;
+
+           /* Setup/assign Accessor functions for MIIM_Read, MIIM_Write, Num Ports, etc.  Basic I/O functions to access board */
+            if (board->board_init(argc, argv, board)) {
+                T_E("Could not initialize board");
+                printf ("//<<< ERROR >>> Warm-Start Error: Could not initialize board (BSP)\n");
+                continue;
+            } else {
+#ifdef  ATOM12_EVAL_BOARD
+                printf ("\n//Comment: <<< Please be patient, Loading ATOM12 Eval Board may take several minutes!!! >>> \n\n");
+#endif
+                printf ("//Comment: Board being initialized\n");
+            }
+
+            /* 1G Accessors */
+            init_conf.miim_read = board->init.init_conf->miim_read;
+            init_conf.miim_write = board->init.init_conf->miim_write;
+            /* 10G Accessors - Not Used for 1G */
+            init_conf.mmd_read = board->init.init_conf->mmd_read;
+            init_conf.mmd_write = board->init.init_conf->mmd_write;
+            init_conf.mmd_read_inc = board->init.init_conf->mmd_read_inc;
+
+            /* This sets the warmstart information in the Instance */
+            vtss_init_conf_set(board->inst, &init_conf);
+            /* This sets the EPG Values in the Chip to be read after warmstart */
+            vtss_restart_conf_set(board->inst, VTSS_RESTART_WARM);
+            printf ("<<< Warm-Start2 >>> Setting Instance2: %p;   warm_restart: 0x%x\n", board->inst, warm_restart);
+
+            /* Save the BSP Accessor functions used to access the board */
+            /* This also updates vtss_state.init_conf with the warmstart src */
+            if (vtss_init_conf_set(board->inst, &init_conf) == VTSS_RC_ERROR) {
+                T_E("Could not initialize: Failure in Conf_set");
+                printf ("// <<< ERROR >>> Warm-Start Error: Could not initialize board (BSP): failure in conf_set \n");
+                continue;
+            }
+            /* This sets the warmstart information in the Instance */
+            printf ("<<< Warm-Start2 >>> restart_info_port: %d, restart_info_src (CU_PHY): 0x%x, warm_start_enable: 0x%x\n",
+                    init_conf.restart_info_port, init_conf.restart_info_src, init_conf.warm_start_enable);
 
             /* Setup/assign Accessor functions for MIIM_Read, MIIM_Write, Num Ports, etc.  Basic I/O functions to access board */
             if (board->board_init(argc, argv, board)) {
@@ -8258,13 +8633,6 @@ _exit:
                     init_conf.restart_info_port, init_conf.restart_info_src, init_conf.warm_start_enable);
 
             printf ("<<< Warm-Start2 >>> Save Config for Instance2: %p  \n", board->inst);
-            /* Save the BSP Accessor functions used to access the board */
-            /* This also updates vtss_state.init_conf with the warmstart src */
-            if (vtss_init_conf_set(board->inst, &init_conf) == VTSS_RC_ERROR) {
-                T_E("Could not initialize: Failure in Conf_set");
-                printf ("// <<< ERROR >>> Warm-Start Error: Could not initialize board (BSP): failure in conf_set \n");
-                continue;
-            }
 
             /* This sets the warmstart information in the Instance */
             printf ("<<< Warm-Start2 >>> restart_info_port: %d, restart_info_src (CU_PHY): 0x%x, warm_start_enable: 0x%x\n",
@@ -8365,7 +8733,7 @@ _exit:
                     printf ("Port No: %d, MAC I/F: 0x%x     MEDIA I/F: 0x%x \n", port_no,
                          phy_resetCfg.mac_if, phy_resetCfg.media_if);
                 }
-
+                
                 if (phy_resetCfg.mac_if == 0) {
                     printf ("Enter MAC I/F Options for Port: %d \n", port_no);
                     printf ("Options: rgmii/sgmii/qsgmii \n");
@@ -8387,8 +8755,9 @@ _exit:
                 if (phy_resetCfg.mac_if == VTSS_PORT_INTERFACE_QSGMII) {
                     mcb_bus = 1; // MAC
                 } else {
-                mcb_bus = 0; // MAC
+                    mcb_bus = 0; // MAC
                 }
+
                 rc=vtss_phy_patch_settings_get(board->inst, port_no, &mcb_bus, &cfg_buf[0], &stat_buf[0]);
                 if (rc == VTSS_RC_OK) {
                     for (i = 0; i < MAX_CFG_BUF_SIZE; i++) {

@@ -1,27 +1,25 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
 
 */
@@ -1995,6 +1993,13 @@ static vtss_rc tesla_revA_8051_patch_9_27_2011(vtss_state_t *vtss_state, vtss_po
 // Bug 19146 - BugZero#73251/73098:Default 1G SerDes config incorrect for 100-FX Mode of operation
 //             Update SigDet Threshold and SerDes sensitivity for 100FX mode of operation.
 // Initializes micro patch for all ports on phy chip containing specified PHY
+//
+// Download patch into PRAM for the internal 8051
+// Attention:  This Version of the uPatch DOES configure the MAC i/f SerDes (0x80E0/0x80F0), so API SerDes config is NOT Required
+// Note: This Patch DOES Support NEW SPI Mode!
+//       However, This Patch DOES NOT Support the Tesla OOS Recovery algorithm.
+//
+
 static vtss_rc tesla_revB_8051_patch(vtss_state_t *vtss_state, vtss_port_no_t port_no)
 {
     u16 reg_val = 0;
@@ -2271,7 +2276,11 @@ static vtss_rc tesla_revB_8051_patch(vtss_state_t *vtss_state, vtss_port_no_t po
 // Tesla  Rev. B Internal 8051 patch.
 // In     : port_no - any port within the chip where to load the 8051 code.
 // Return : VTSS_RC_OK if configuration done else error code.
-
+//
+// Attention:  This Version of the uPatch DOES NOT configure the MAC i/f SerDes, so it must be performed within the API
+// Note: This Patch Support NEW SPI Mode which is for Rev. B/C Silicon.
+// This Patch DOES SUPPORT the Tesla OOS Recovery algorithm.
+//
 // Download patch into PRAM for the internal 8051
 // Jan. 26, 2016
 static vtss_rc tesla_revB_8051_patch(vtss_state_t *vtss_state, vtss_port_no_t port_no)
@@ -2559,11 +2568,17 @@ static vtss_rc tesla_revB_8051_patch(vtss_state_t *vtss_state, vtss_port_no_t po
     return VTSS_RC_OK;
 }
 
+#if defined(VTSS_PHY_TS_SPI_CLK_THRU_PPS0)
+
 // Tesla  Rev. D Internal 8051 patch.
 // In     : port_no - any port within the chip where to load the 8051 code.
 // Return : VTSS_RC_OK if configuration done else error code.
 
 // Download patch into PRAM for the internal 8051
+// Attention:  This Version of the uPatch DOES NOT configure the MAC i/f SerDes, so it must be performed within the API
+// Note: This Patch Support NEW SPI Mode which is for backward compatibility with Rev. C Silicon.
+//       However, Rev. B/C Silicon has it's own uPatch, seen above, CRC=0xA44A.
+// This Patch DOES SUPPORT the Tesla OOS Recovery algorithm.
 // Jan. 26, 2016
 static vtss_rc tesla_revD_8051_patch(vtss_state_t *vtss_state, vtss_port_no_t port_no)
 {
@@ -2768,6 +2783,11 @@ static vtss_rc tesla_revD_8051_patch(vtss_state_t *vtss_state, vtss_port_no_t po
     }
     VTSS_I("loading Tesla Rev_D micropatch CRC_CHECKSUM: 0x042C- port_no:%d\n", port_no);
     // Check to see if the code has already been downloaded correctly, if so, Just return, No need to do it again */
+    // NOTE: uPatch CRC=0x042C and CRC=0x18C8 - Both Support Tesla OOS Recovery */
+    //       However, if the existing patch is 0x042C, it has NEW SPI Mode support and SerDes config in API */
+    //       If 0x18C8, NEW SPI is NOT supported and SerDes config is in uPatch */
+    //       If existing uPatch is 0x18C8, it will NOT support 0x042C functionality */
+    //       This comes into play for WarmStart or Safe-Switch-Over */
     if (vtss_phy_is_8051_crc_ok_private(vtss_state, port_no,
                                         FIRMWARE_START_ADDR,
                                         sizeof(patch_arr) + 1 /* Add one for the byte auto-added in the download function */,
@@ -2809,7 +2829,6 @@ static vtss_rc tesla_revD_8051_patch(vtss_state_t *vtss_state, vtss_port_no_t po
         }
 
         VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
-
     }
 
     if (skip_dnload && patch_ok) {
@@ -2854,7 +2873,291 @@ static vtss_rc tesla_revD_8051_patch(vtss_state_t *vtss_state, vtss_port_no_t po
     return VTSS_RC_OK;
 }
 
-#endif
+#else
+
+// Tesla  Rev. D Internal 8051 patch.
+// In     : port_no - any port within the chip where to load the 8051 code.
+// Return : VTSS_RC_OK if configuration done else error code.
+//
+// Download patch into PRAM for the internal 8051
+// Attention:  This Version of the uPatch DOES configure the MAC i/f SerDes (0x80E0/0x80F0), so API SerDes config is NOT Required
+// Note: This Patch DOES NOT Support NEW SPI Mode!
+// This Patch DOES SUPPORT the Tesla OOS Recovery algorithm.
+//
+// Download patch into PRAM for the internal 8051
+// Dec. 01, 2017
+static vtss_rc tesla_revD_8051_patch(vtss_state_t *vtss_state, vtss_port_no_t port_no)
+{
+    u16 reg_val = 0;
+    u16 chip_port_no = 0;
+    BOOL skip_dnload = FALSE;
+    BOOL patch_ok = FALSE;
+
+    const u8 patch_arr[] = {
+        0x44, 0x3d, 0x02, 0x40, 0x25, 0x02, 0x44, 0x4a, 0x22, 0x22,
+        0x00, 0x02, 0x43, 0x7e, 0x02, 0x43, 0xcd, 0xed, 0xff, 0xe5,
+        0xfc, 0x54, 0x38, 0x64, 0x20, 0x70, 0x08, 0x65, 0xff, 0x70,
+        0x04, 0xed, 0x44, 0x80, 0xff, 0x22, 0xd2, 0x0a, 0xe5, 0x7e,
+        0x54, 0x0f, 0x24, 0xf4, 0x70, 0x03, 0x02, 0x40, 0xc6, 0x14,
+        0x70, 0x03, 0x02, 0x41, 0x4b, 0x24, 0x02, 0x60, 0x03, 0x02,
+        0x41, 0x90, 0xe5, 0x7d, 0x54, 0x0f, 0xff, 0x78, 0x12, 0xef,
+        0xf6, 0x54, 0x01, 0xf5, 0xfb, 0xef, 0x54, 0x02, 0x7f, 0x00,
+        0x25, 0xe0, 0x25, 0xe0, 0xfe, 0x08, 0xf6, 0x08, 0xef, 0xf6,
+        0x24, 0x35, 0xfb, 0xee, 0x12, 0x41, 0xde, 0x12, 0x41, 0xaa,
+        0x60, 0xfb, 0x12, 0x41, 0xf8, 0x78, 0x15, 0xf6, 0x18, 0xe6,
+        0x24, 0x55, 0xfb, 0x18, 0xe6, 0x12, 0x41, 0xde, 0x12, 0x41,
+        0xaa, 0x60, 0xfb, 0x12, 0x41, 0xf8, 0x78, 0x16, 0xf6, 0x78,
+        0x12, 0xe6, 0xf5, 0xfb, 0x7b, 0x01, 0x7a, 0x00, 0x7d, 0xee,
+        0x7f, 0x7d, 0x12, 0x38, 0xbd, 0x7d, 0x19, 0x7f, 0x03, 0x12,
+        0x3e, 0x9a, 0x12, 0x44, 0x08, 0x78, 0x12, 0xe6, 0x54, 0x01,
+        0xf5, 0xfb, 0x78, 0x15, 0x12, 0x41, 0xe9, 0x24, 0x35, 0x12,
+        0x41, 0x9c, 0x78, 0x16, 0x12, 0x41, 0xe9, 0x24, 0x55, 0x12,
+        0x41, 0x9c, 0x78, 0x12, 0xe6, 0xf5, 0xfb, 0xe4, 0xfb, 0xfa,
+        0x7d, 0xee, 0x7f, 0x7d, 0x02, 0x41, 0x98, 0xe5, 0x7d, 0x54,
+        0x01, 0xff, 0x8f, 0xfb, 0xe5, 0x7e, 0xae, 0x7d, 0x78, 0x0c,
+        0x12, 0x44, 0x54, 0xd8, 0xfb, 0x30, 0xe0, 0x3e, 0x12, 0x41,
+        0xb6, 0x12, 0x44, 0x54, 0xd8, 0xfb, 0x33, 0x33, 0x33, 0x54,
+        0xf8, 0x44, 0xc0, 0x4c, 0xfa, 0xed, 0xfb, 0x7d, 0x10, 0x7f,
+        0x07, 0x12, 0x3e, 0xda, 0x7b, 0xff, 0x7d, 0x10, 0x7f, 0x07,
+        0x12, 0x3d, 0xd7, 0xef, 0x4e, 0x60, 0xf3, 0x7d, 0x11, 0x12,
+        0x41, 0xca, 0x7d, 0x19, 0x7f, 0x03, 0x12, 0x3e, 0xda, 0x7d,
+        0x12, 0x12, 0x41, 0xca, 0x7d, 0x1a, 0x7f, 0x03, 0x80, 0x2f,
+        0x7d, 0x19, 0x7f, 0x03, 0x12, 0x3e, 0x9a, 0x7d, 0x11, 0x12,
+        0x41, 0xd4, 0x7d, 0x1a, 0x7f, 0x03, 0x12, 0x3e, 0x9a, 0x7d,
+        0x12, 0x12, 0x41, 0xd4, 0x12, 0x41, 0xb6, 0x12, 0x44, 0x54,
+        0xd8, 0xfb, 0x33, 0x33, 0x33, 0x54, 0xf8, 0x44, 0x80, 0x4c,
+        0xfa, 0xed, 0xfb, 0x7d, 0x10, 0x7f, 0x07, 0x02, 0x3e, 0xda,
+        0xe5, 0x7e, 0xae, 0x7d, 0x78, 0x04, 0x12, 0x44, 0x54, 0xd8,
+        0xfb, 0xff, 0x20, 0xe2, 0x41, 0x13, 0x92, 0x09, 0xef, 0xa2,
+        0xe1, 0x92, 0x08, 0x30, 0x09, 0x36, 0xe4, 0xf5, 0x10, 0x7b,
+        0xfe, 0x12, 0x42, 0x03, 0xef, 0xc4, 0x33, 0x33, 0x54, 0xc0,
+        0xff, 0xc0, 0x07, 0x7b, 0x54, 0x12, 0x42, 0x03, 0xd0, 0xe0,
+        0x4f, 0xff, 0x74, 0x22, 0x25, 0x10, 0xf8, 0xa6, 0x07, 0x05,
+        0x10, 0xe5, 0x10, 0xc3, 0x94, 0x02, 0x40, 0xd9, 0x22, 0x7b,
+        0x01, 0x7a, 0x00, 0x7d, 0xee, 0x7f, 0x92, 0x12, 0x38, 0xbd,
+        0x22, 0xfb, 0x18, 0xe6, 0x34, 0xb0, 0xfa, 0x7d, 0x10, 0x7f,
+        0x07, 0x12, 0x3e, 0xda, 0x22, 0x7b, 0xff, 0x7d, 0x10, 0x7f,
+        0x07, 0x12, 0x3d, 0xd7, 0xef, 0x4e, 0x22, 0x7d, 0x18, 0x7f,
+        0x03, 0x12, 0x3e, 0x9a, 0xac, 0x06, 0xad, 0x07, 0x7e, 0x00,
+        0xe5, 0x7e, 0x54, 0xf0, 0x78, 0x04, 0x22, 0x7f, 0x07, 0x12,
+        0x3e, 0x9a, 0xaa, 0x06, 0xab, 0x07, 0x22, 0xaa, 0x06, 0xab,
+        0x07, 0x7f, 0x07, 0x12, 0x3e, 0xda, 0x22, 0x34, 0xf0, 0xfa,
+        0x7d, 0x10, 0x7f, 0x07, 0x12, 0x3e, 0xda, 0x22, 0xe6, 0xfb,
+        0x7a, 0x00, 0x7d, 0x11, 0x7f, 0x07, 0x12, 0x3e, 0xda, 0x78,
+        0x14, 0xe6, 0x22, 0x7d, 0x11, 0x7f, 0x07, 0x12, 0x3e, 0x9a,
+        0xef, 0x54, 0xfd, 0x22, 0xe5, 0x10, 0x24, 0x17, 0xfd, 0x7f,
+        0x04, 0x12, 0x3d, 0xd7, 0x22, 0xe4, 0xf5, 0x11, 0x12, 0x44,
+        0x36, 0x20, 0xe7, 0x1e, 0x7b, 0xfe, 0x12, 0x42, 0xca, 0xef,
+        0xc4, 0x33, 0x33, 0x54, 0xc0, 0xff, 0xc0, 0x07, 0x7b, 0x54,
+        0x12, 0x42, 0xca, 0xd0, 0xe0, 0x4f, 0xff, 0x74, 0x22, 0x25,
+        0x11, 0xf8, 0xa6, 0x07, 0x12, 0x44, 0x36, 0x20, 0xe7, 0x03,
+        0x02, 0x42, 0xbd, 0x54, 0x03, 0x64, 0x03, 0x60, 0x62, 0x7b,
+        0xcb, 0x12, 0x42, 0xd5, 0x8f, 0xfb, 0x7b, 0x20, 0x12, 0x42,
+        0xd5, 0xef, 0x4e, 0x70, 0x3c, 0x7b, 0x22, 0x7d, 0x18, 0x7f,
+        0x06, 0x12, 0x3d, 0xd7, 0xef, 0x64, 0x01, 0x4e, 0x60, 0x1c,
+        0x7d, 0x1c, 0xe4, 0xff, 0x12, 0x3e, 0x9a, 0xef, 0x54, 0x1b,
+        0x64, 0x0a, 0x70, 0x16, 0x7b, 0xcc, 0x7d, 0x10, 0xff, 0x12,
+        0x3d, 0xd7, 0xef, 0x64, 0x01, 0x4e, 0x70, 0x08, 0x12, 0x44,
+        0x2c, 0xe4, 0xfb, 0xfa, 0x80, 0x1a, 0x12, 0x44, 0x2c, 0x7b,
+        0x01, 0x7a, 0x00, 0x80, 0x11, 0x12, 0x44, 0x2c, 0x12, 0x44,
+        0x36, 0x54, 0x40, 0xfe, 0xc4, 0x13, 0x13, 0x54, 0x03, 0xfb,
+        0x7a, 0x00, 0x7d, 0xee, 0x12, 0x38, 0xbd, 0xe5, 0x11, 0x24,
+        0x17, 0xfd, 0x7b, 0xff, 0x7f, 0x04, 0x12, 0x3d, 0xd7, 0xef,
+        0x4e, 0x70, 0x07, 0x74, 0x22, 0x25, 0x11, 0xf8, 0xe4, 0xf6,
+        0x05, 0x11, 0xe5, 0x11, 0xc3, 0x94, 0x02, 0x50, 0x03, 0x02,
+        0x42, 0x11, 0x22, 0xe5, 0x11, 0x24, 0x17, 0xfd, 0x7f, 0x04,
+        0x12, 0x3d, 0xd7, 0x22, 0xe5, 0x11, 0x24, 0x17, 0xfd, 0x7f,
+        0x04, 0x12, 0x3d, 0xd7, 0x22, 0xe4, 0xf5, 0xfb, 0x7d, 0x1c,
+        0xe4, 0xff, 0x12, 0x3e, 0x9a, 0xad, 0x07, 0xac, 0x06, 0xec,
+        0x54, 0xc0, 0xff, 0xed, 0x54, 0x3f, 0x4f, 0xf5, 0x20, 0x30,
+        0x06, 0x2c, 0x30, 0x01, 0x08, 0xa2, 0x04, 0x72, 0x03, 0x92,
+        0x07, 0x80, 0x21, 0x30, 0x04, 0x06, 0x7b, 0xcc, 0x7d, 0x11,
+        0x80, 0x0d, 0x30, 0x03, 0x06, 0x7b, 0xcc, 0x7d, 0x10, 0x80,
+        0x04, 0x7b, 0x66, 0x7d, 0x16, 0xe4, 0xff, 0x12, 0x3d, 0xd7,
+        0xee, 0x4f, 0x24, 0xff, 0x92, 0x07, 0xaf, 0xfb, 0x74, 0x1b,
+        0x2f, 0xf8, 0xe6, 0xff, 0xa6, 0x20, 0x20, 0x07, 0x39, 0x8f,
+        0x20, 0x30, 0x07, 0x34, 0x30, 0x00, 0x31, 0x20, 0x04, 0x2e,
+        0x20, 0x03, 0x2b, 0xe4, 0xf5, 0xff, 0x75, 0xfc, 0xc2, 0xe5,
+        0xfc, 0x30, 0xe0, 0xfb, 0xaf, 0xfe, 0xef, 0x20, 0xe3, 0x1a,
+        0xae, 0xfd, 0x44, 0x08, 0xf5, 0xfe, 0x75, 0xfc, 0x80, 0xe5,
+        0xfc, 0x30, 0xe0, 0xfb, 0x8f, 0xfe, 0x8e, 0xfd, 0x75, 0xfc,
+        0x80, 0xe5, 0xfc, 0x30, 0xe0, 0xfb, 0x05, 0xfb, 0xaf, 0xfb,
+        0xef, 0xc3, 0x94, 0x04, 0x50, 0x03, 0x02, 0x42, 0xe3, 0xe4,
+        0xf5, 0xfb, 0x22, 0xe5, 0x7e, 0x54, 0x0f, 0x64, 0x01, 0x70,
+        0x23, 0xe5, 0x7e, 0x30, 0xe4, 0x1e, 0x90, 0x47, 0xd0, 0xe0,
+        0x44, 0x02, 0xf0, 0x54, 0xfb, 0xf0, 0x90, 0x47, 0xd4, 0xe0,
+        0x44, 0x04, 0xf0, 0x7b, 0x03, 0x7d, 0x5b, 0x7f, 0x5d, 0x12,
+        0x36, 0x29, 0x7b, 0x0e, 0x80, 0x1c, 0x90, 0x47, 0xd0, 0xe0,
+        0x54, 0xfd, 0xf0, 0x44, 0x04, 0xf0, 0x90, 0x47, 0xd4, 0xe0,
+        0x54, 0xfb, 0xf0, 0x7b, 0x02, 0x7d, 0x5b, 0x7f, 0x5d, 0x12,
+        0x36, 0x29, 0x7b, 0x06, 0x7d, 0x60, 0x7f, 0x63, 0x12, 0x36,
+        0x29, 0x22, 0xe5, 0x7e, 0x30, 0xe5, 0x35, 0x30, 0xe4, 0x0b,
+        0x7b, 0x02, 0x7d, 0x33, 0x7f, 0x35, 0x12, 0x36, 0x29, 0x80,
+        0x10, 0x7b, 0x01, 0x7d, 0x33, 0x7f, 0x35, 0x12, 0x36, 0x29,
+        0x90, 0x47, 0xd2, 0xe0, 0x44, 0x04, 0xf0, 0x90, 0x47, 0xd2,
+        0xe0, 0x54, 0xf7, 0xf0, 0x90, 0x47, 0xd1, 0xe0, 0x44, 0x10,
+        0xf0, 0x7b, 0x05, 0x7d, 0x84, 0x7f, 0x86, 0x12, 0x36, 0x29,
+        0x22, 0xad, 0x07, 0xac, 0x06, 0x8c, 0x8c, 0xed, 0xf5, 0x8a,
+        0xe5, 0x89, 0x54, 0xf0, 0x44, 0x01, 0xf5, 0x89, 0xd2, 0xa9,
+        0xc2, 0x65, 0xd2, 0x8c, 0x20, 0x65, 0x05, 0x43, 0x87, 0x01,
+        0x80, 0xf8, 0xc2, 0x8c, 0xc2, 0xa9, 0x22, 0xe5, 0x11, 0x24,
+        0x17, 0x54, 0x1f, 0x44, 0x80, 0xff, 0x22, 0x74, 0x22, 0x25,
+        0x11, 0xf8, 0xe6, 0x22, 0x12, 0x44, 0x5b, 0x90, 0x47, 0xfa,
+        0xe0, 0x54, 0xf8, 0x44, 0x02, 0xf0, 0x22, 0x12, 0x42, 0xe0,
+        0x30, 0x09, 0x03, 0x12, 0x42, 0x0e, 0x22, 0xce, 0xa2, 0xe7,
+        0x13, 0xce, 0x13, 0x22, 0xc2, 0x09, 0xc2, 0x08, 0x22
+    };
+
+    // Only download 8051 Patches to Port 0 of PHY!
+    // Check to see if this is PHY Port 0, If it is not, the 8051 CRC Calculation will Fail on other PHY Ports */
+    VTSS_RC(vtss_phy_page_ext(vtss_state, port_no));
+    VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_PHY_CONTROL_4, &reg_val));
+    chip_port_no = (reg_val & VTSS_M_VTSS_PHY_EXTENDED_PHY_CONTROL_4_PHY_ADDRESS) >> 11;
+    VTSS_I("reg_val:0x%X, chip_port_no:%d, port_no:%u", reg_val,  chip_port_no, port_no);
+    if (chip_port_no != 0) {
+        VTSS_E("ERROR: Attempting to download patch on Non-Base Port.  reg_val:0x%X, chip_port_no:%d, port_no:%u", reg_val,  chip_port_no, port_no);
+        return VTSS_RC_ERR_PHY_PATCH_SETTING_NOT_SUPPORTED;
+    }
+    VTSS_I("loading Tesla Rev_D micropatch CRC_CHECKSUM: 0x18C8 - port_no:%d\n", port_no);
+    // Check to see if the code has already been downloaded correctly, if so, Just return, No need to do it again */
+    // NOTE: uPatch CRC=0x042C and CRC=0x18C8 - Both Support Tesla OOS Recovery */
+    //       However, if the existing patch is 0x042C, it has NEW SPI Mode support and SerDes config in API */
+    //       If 0x18C8, NEW SPI is NOT supported and SerDes config is in uPatch */
+    //       If existing uPatch is 0x042C, it will support 0x18C8 functionality */
+    //       This comes into play for WarmStart or Safe-Switch-Over */
+    if (vtss_phy_is_8051_crc_ok_private(vtss_state, port_no,
+                                        FIRMWARE_START_ADDR,
+                                        sizeof(patch_arr) + 1 /* Add one for the byte auto-added in the download function */,
+                                        0x18C8, TRUE) == VTSS_RC_OK) {
+
+        // CRC is Correct, So at this point, we can skip the Micro Dnload
+        skip_dnload = TRUE;
+        patch_ok = TRUE;
+
+        // CRC is Correct, Make sure that all the patches are still present
+        VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));
+        VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_3, &reg_val));
+        // Check: Trap ROM at _MicroSmiRead+0x1d to spoof patch-presence
+        if (reg_val != 0x3eb7) {
+            VTSS_I("CRC for Download correct: FAIL-Check::SpoofPatchPresence; RegVal: 0x%x", reg_val);
+            patch_ok = FALSE;
+        }
+
+        // Check: Branch to starting address of SpoofPatchPresence
+        VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_4, &reg_val));
+        if (reg_val != 0x4012) {
+            VTSS_I("CRC for Download correct: FAIL-Check::Branch to Start Addr of SpoofPatchPresence; RegVal: 0x%x", reg_val);
+            patch_ok = FALSE;
+        }
+
+        // Check: Enable patch fram trap described in register 3-4
+        VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_12, &reg_val));
+        if (reg_val != 0x0100) {
+            VTSS_I("CRC for Download correct: FAIL-Check::Enabling patch trap for SpoofPatchPresence; RegVal: 0x%x", reg_val);
+            patch_ok = FALSE;
+        }
+
+        // Check: Micro not in Reset, Enable 8051 clock enable; operate at 125 MHz
+        VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, &reg_val));
+        if ((reg_val & 0xf1ff) != 0xc018) {
+            // mask off bits 11:9 and check that speed, etc., are set as expected; i.e., "normal" operating mode with 125 MHz clock
+            VTSS_I("CRC for Download correct: FAIL-Check::Enable 8051 Clk Enable and Operating Speed set to 125MHz; RegVal: 0x%x", reg_val);
+            patch_ok = FALSE;
+        }
+
+        VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
+
+        // Check to see if the code has already been downloaded correctly, if so, Just return, No need to do it again */
+    } else {
+        if (vtss_state->phy_state[port_no].micro_patch_crc == 0x042C) {
+
+            VTSS_I("CRC for Download correct for Alternate-CRC: 0x042C " );
+
+            // CRC is Correct, So at this point, we can skip the Micro Dnload
+            skip_dnload = TRUE;
+            patch_ok = TRUE;
+
+            // CRC is Correct, Make sure that all the patches are still present
+            VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));
+            VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_3, &reg_val));
+            // Check: Trap ROM at _MicroSmiRead+0x1d to spoof patch-presence
+            if (reg_val != 0x3eb7) {
+                VTSS_I("CRC for Download correct: FAIL-Check::SpoofPatchPresence; RegVal: 0x%x", reg_val);
+                patch_ok = FALSE;
+            }
+
+            // Check: Branch to starting address of SpoofPatchPresence
+            VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_4, &reg_val));
+            if (reg_val != 0x4012) {
+                VTSS_I("CRC for Download correct: FAIL-Check::Branch to Start Addr of SpoofPatchPresence; RegVal: 0x%x", reg_val);
+                patch_ok = FALSE;
+            }
+
+            // Check: Enable patch fram trap described in register 3-4
+            VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_12, &reg_val));
+            if (reg_val != 0x0100) {
+                VTSS_I("CRC for Download correct: FAIL-Check::Enabling patch trap for SpoofPatchPresence; RegVal: 0x%x", reg_val);
+                patch_ok = FALSE;
+            }
+            // Check: Micro not in Reset, Enable 8051 clock enable; operate at 125 MHz
+            VTSS_RC(PHY_RD_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, &reg_val));
+            if ((reg_val & 0xf1ff) != 0xc018) {
+                // mask off bits 11:9 and check that speed, etc., are set as expected; i.e., "normal" operating mode with 125 MHz clock
+                VTSS_I("CRC for Download correct: FAIL-Check::Enable 8051 Clk Enable and Operating Speed set to 125MHz; RegVal: 0x%x", reg_val);
+                patch_ok = FALSE;
+            }
+
+            VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
+        } else {
+            VTSS_I("CRC NOT correct: Requires Micro-Patch Download" );
+        }
+    }
+
+    if (skip_dnload && patch_ok) {
+        VTSS_I("Skipping download of 8051, CRC for Download correct; Micro-Patch Enabled and OK");
+    } else {
+        if (skip_dnload) {
+            VTSS_I("Skipping download of 8051, CRC for Download correct; However, Micro-Patch Not Enabled");
+        } else {
+            VTSS_I("Downloading 8051 Patch, CRC for Download NOT correct;  Setting Micro-Patch to Not Enabled");
+            VTSS_RC(download_8051_code(vtss_state, port_no, &patch_arr[0], sizeof(patch_arr)));
+            patch_ok = FALSE;
+        }
+
+        if (!patch_ok) {
+            VTSS_I("Micro-Patch Not Enabled - Enabling at this time");
+            if (skip_dnload) {
+                VTSS_I("Micro-Assert-Reset Performed, Download of 8051 Skipped, Enabling Micro-Patch \n");
+                VTSS_RC(vtss_phy_micro_assert_reset(vtss_state, port_no));
+            }
+            VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));
+            // Enable 8051 clock; CLEAR patch present; disable PRAM clock override and addr. auto-incr; operate at 125 MHz
+            //VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0x4018));
+            //VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0xc018));  // Release 8051 SW Reset
+            VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_3, 0x3eb7));  // Trap ROM at _MicroSmiRead+0x1d to spoof patch-presence
+            VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_4, 0x4012));  // Branch to starting address of SpoofPatchPresence
+            VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_12, 0x0100)); // Enable patch fram trap described in register 3-4
+            // Enable 8051 clock; CLEAR patch present; disable PRAM clock override and addr. auto-incr; operate at 125 MHz
+            VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0x4018)); //Removed in favor of micro-assert-reset
+            VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0xc018));  // Release 8051 SW Reset
+            VTSS_I("Enable 8051 clk, Patch present Spoofed, Release SW Reset");
+
+            VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
+
+            // Check that code is downloaded correctly.
+            VTSS_RC(vtss_phy_is_8051_crc_ok_private(vtss_state, port_no,
+                                                    FIRMWARE_START_ADDR,
+                                                    sizeof(patch_arr) + 1, // Add one for the byte auto-added in the download function
+                                                    0x18C8, FALSE));
+        }
+    }
+
+    return VTSS_RC_OK;
+}
+
+#endif  /* end of VTSS_PHY_TS_SPI_CLK_THRU_PPS0 */
+
+#endif /* End of MICRO_PATCH_REV_TS_FIFO_2 */
 
 static vtss_rc vtss_phy_pre_init_tesla_revB_1588(vtss_state_t *vtss_state, vtss_port_no_t port_no)
 {
@@ -3143,7 +3446,7 @@ static vtss_rc vtss_phy_pre_init_seq_tesla_rev_d(vtss_state_t *vtss_state, vtss_
     VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0012));
     VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x480a));
     VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8f82));
-    /*excluding this register configuraiton for tesla revisions <= D , 
+    /*excluding this register configuraiton for tesla revisions <= D ,
       and have to taken care for tesla Rev-E*/
 #if 0
     VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
@@ -3362,6 +3665,304 @@ static vtss_rc vtss_phy_pre_init_seq_tesla_rev_d(vtss_state_t *vtss_state, vtss_
 
 }
 
+// Initialization needed for Tesla Rev E. (For whole chip and must be done before init. of the individual ports)
+//
+// In : port_no : Port number (MUST be the first port for the chip)..
+//
+// Return : VTSS_RC_OK if configuration done else error code.
+// Date : Jan 12,2018 - updated to address bugzilla #9871 and #9886
+static vtss_rc vtss_phy_pre_init_seq_tesla_rev_e(vtss_state_t *vtss_state, vtss_port_no_t port_no)
+{
+    VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
+    VTSS_RC(PHY_WR_MASKED_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_CONTROL_AND_STATUS, 0x0001, 0x0001));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_PHY_CONTROL_2, 0x0040));
+    VTSS_RC(vtss_phy_page_ext2(vtss_state, port_no));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_CU_PMD_TX_CTRL, 0x02be));
+    VTSS_RC(vtss_phy_page_test(vtss_state, port_no));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_TEST_PAGE_20, 0x4320));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_TEST_PAGE_24, 0x0c00));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_TEST_PAGE_9, 0x18ca));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_TEST_PAGE_5, 0x1b20));
+    VTSS_RC(PHY_WR_MASKED_PAGE(vtss_state, port_no, VTSS_PHY_TEST_PAGE_8, 0x8000, 0x8000));
+    VTSS_RC(vtss_phy_page_tr(vtss_state, port_no));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0004));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x01bd));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8fae));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x000f));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x000f));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8fac));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x00a0));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xf147));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x97a0));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0005));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x2f54));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8fe4));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0027));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x303d));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x9792));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0704));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x87fe));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0006));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0150));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8fe0));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0012));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xb00a));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8f82));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0d74));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8f80));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0012));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x82e0));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0005));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0208));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x83a2));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x9186));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x83b2));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x000e));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x3700));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8fb0));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0004));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x9f81));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x9688));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xffff));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8fd2));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0003));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x9fa2));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x968a));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0020));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x640b));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x9690));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x2220));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8258));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x2a20));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x825a));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x3060));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x825c));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x3fa0));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x825e));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xe0f0));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x83a6));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x1489));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8f92));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x7000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x96a2));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0007));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x1448));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x96a6));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x00ee));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xffdd));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x96a0));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0091));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xb06c));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8fe8));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0004));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x1600));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8fea));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x00ee));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xff00));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x96b0));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x7000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x96b2));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0814));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x96b4));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0068));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x8980));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8f90));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xd8f0));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x83a4));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0400));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8fc0));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0050));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x100f));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x87fa));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0003));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8796));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x00c3));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xff98));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x87f8));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0018));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x292a));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8fa4));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x00d2));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xc46f));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x968c));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0620));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x97a2));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0013));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x132f));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x96a4));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x96a8));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x00c0));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xa028));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8ffc));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0090));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x1c09));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8fec));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0004));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xa6a1));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8fee));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x00b0));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x1807));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8ffe));
+#ifndef VTSS_10BASE_TE
+    VTSS_RC(vtss_phy_page_ext2(vtss_state, port_no));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x028e));
+    VTSS_RC(vtss_phy_page_tr(vtss_state, port_no));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0008));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xa518));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8486));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x006d));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xc696));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8488));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0912));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x848a));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0db6));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x848e));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0059));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x6596));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x849c));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0514));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x849e));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0041));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0280));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84a2));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84a4));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84a6));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84a8));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84aa));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x007d));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xf7dd));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84ae));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x006d));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x95d4));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84b0));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0049));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x2410));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84b2));
+#else //using 10BASE-Te
+    VTSS_RC(vtss_phy_page_ext2(vtss_state, port_no));
+    VTSS_RC(PHY_WR_MASKED_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x8000, 0x8000));
+    VTSS_RC(vtss_phy_page_tr(vtss_state, port_no));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0008));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xa499));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8486));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0075));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xf759));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8488));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0914));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x848a));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x00f7));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xff7b));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x848c));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0eb9));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x848e));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0061));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x85d6));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8490));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0055));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x44d2));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8492));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0044));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xa8aa));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8494));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0cb9));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8496));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x00f7));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xff79));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x8498));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0caa));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x849a));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0061));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x8618));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x849c));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0618));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x849e));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0018));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84a0));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0061));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x848a));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84a2));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84a4));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84a6));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84a8));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x0000));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84aa));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0029));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x265d));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84ac));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x007d));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0xd658));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84ae));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0061));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x8618));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84b0));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0061));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x8618));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84b2));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_18, 0x0061));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_17, 0x8618));
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_PAGE_TR_16, 0x84b4));
+#endif //using 10BASE-Te
+    VTSS_RC(vtss_phy_page_test(vtss_state, port_no));
+    VTSS_RC(PHY_WR_MASKED_PAGE(vtss_state, port_no,  VTSS_PHY_TEST_PAGE_8, 0x0000, 0x8000));
+    VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
+    VTSS_RC(PHY_WR_MASKED_PAGE(vtss_state, port_no, VTSS_PHY_EXTENDED_CONTROL_AND_STATUS, 0x0000, 0x0001));
+
+#if defined (MICRO_PATCH_REV_TS_FIFO_2)
+    VTSS_RC(tesla_revD_8051_patch(vtss_state, port_no)); // Rev D. This is for RevD Only
+#else
+    VTSS_RC(tesla_revB_8051_patch(vtss_state, port_no)); // This is the OLD-Patch (Non-Middle-Man), where rev B, C, & D have the same patch.
+#endif
+    
+    VTSS_RC(vtss_phy_pre_init_tesla_revB_1588(vtss_state, port_no)); //Init 1588 register using Tesla RevB micro patch
+
+    return VTSS_RC_OK;
+}
+
+
 // Initialization needed for Tesla. (For whole chip and must be done before init. of the individual ports)
 //
 // In : port_no : Port number (MUST be the first port for the chip)..
@@ -3376,10 +3977,15 @@ static vtss_rc vtss_phy_pre_init_seq_tesla(vtss_state_t *vtss_state, vtss_port_n
     } else if (ps->type.revision == VTSS_PHY_TESLA_REV_B) {
         VTSS_RC(vtss_phy_pre_init_seq_tesla_17_august_2011(vtss_state, port_no));
     } else if (ps->type.revision == VTSS_PHY_TESLA_REV_D) {
+        VTSS_D("Pre_init script 'D' implemented for rev:%d ", ps->type.revision);
         VTSS_RC(vtss_phy_pre_init_seq_tesla_rev_d(vtss_state, port_no));
+    } else if (ps->type.revision == VTSS_PHY_TESLA_REV_E) {
+        VTSS_D("Pre_init script 'E' implemented for rev:%d ", ps->type.revision);
+        VTSS_RC(vtss_phy_pre_init_seq_tesla_rev_e(vtss_state, port_no));
     } else {
-        VTSS_I("Pre_init script not implemented for rev:%d, defaulting to latest known init script", ps->type.revision);
-        VTSS_RC(vtss_phy_pre_init_seq_tesla_rev_d(vtss_state, port_no));
+        /* Note: EEE Settings for Tesla Rev.E are significantly different than previous versions */
+        VTSS_I("Pre_init script not implemented for rev:%d, DEFAULTING to latest known init script: Rev E", ps->type.revision);
+        VTSS_RC(vtss_phy_pre_init_seq_tesla_rev_e(vtss_state, port_no));
     }
     return VTSS_RC_OK;
 }
@@ -3458,6 +4064,8 @@ static vtss_rc viper_revA_8051_patch(vtss_state_t *vtss_state, vtss_port_no_t po
                                         0xE800,
                                         sizeof(patch_arr) + 1 /* Add one for the byte auto-added in the download function */,
                                         0x9995, TRUE) == VTSS_RC_OK) {
+
+        vtss_state->phy_state[port_no].micro_patch_crc = 0x9995;
         VTSS_I("Skipping download of 8051, CRC for Download correct");
         skip_dnload = TRUE;
         //printf("Skipping download of 8051, CRC for Download correct \n");
@@ -3469,11 +4077,7 @@ static vtss_rc viper_revA_8051_patch(vtss_state_t *vtss_state, vtss_port_no_t po
         VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));
 
         if (skip_dnload) {
-            // Enable 8051 clock; SET patch present; disable PRAM clock override and addr. auto-incr; operate at 125 MHz
-            VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0x4098));
-            // Release 8051 SW Reset
-            VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0xc098));
-            VTSS_I("Enable 8051 clk, SET micro-patch present, Release SW Reset");
+            VTSS_I("Skip Patch Dnload: No need to Enable 8051 clk or CLEAR clear-patch present or Release SW Reset");
         } else {
             // Enable 8051 clock; CLEAR patch present; disable PRAM clock override and addr. auto-incr; operate at 125 MHz
             VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0x4018));
@@ -3488,21 +4092,22 @@ static vtss_rc viper_revA_8051_patch(vtss_state_t *vtss_state, vtss_port_no_t po
     // Check that code is downloaded correctly.
     if (skip_dnload) {
         VTSS_I("PHY micro-patch - Already Loaded and Activated! ");
+        return VTSS_RC_OK;
     } else {
         VTSS_RC(vtss_phy_is_8051_crc_ok_private(vtss_state, port_no,
                                                 0xE800,
                                                 sizeof(patch_arr) + 1, // Add one for the byte auto-added in the download function
                                                 0x9995, FALSE));
-
-        VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));
-        VTSS_RC(vtss_phy_micro_assert_reset(vtss_state, port_no));
-        VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no)); // Switch back to micro/GPIO register-page
-        VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_12, 0x0000));        // Clear all patches
-        VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0x4098));        // Enable 8051 clock; set patch present; disable PRAM clock override and addr. auto-incr; operate at 125 MHz
-        VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0xc098));        // Release 8051 SW Reset
-        VTSS_I("Enable 8051 clk, SET micro-patch present, Release SW Reset");
-        VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
     }
+
+    VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));
+    VTSS_RC(vtss_phy_micro_assert_reset(vtss_state, port_no));
+    VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no)); // Switch back to micro/GPIO register-page
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_12, 0x0000));        // Clear all patches
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0x4098));        // Enable 8051 clock; set patch present; disable PRAM clock override and addr. auto-incr; operate at 125 MHz
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0xc098));        // Release 8051 SW Reset
+    VTSS_I("Enable 8051 clk, SET micro-patch present, Release SW Reset");
+    VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
 
     return VTSS_RC_OK;
 }
@@ -3544,6 +4149,8 @@ static vtss_rc viper_revB_8051_patch(vtss_state_t *vtss_state, vtss_port_no_t po
                                         0xE800,
                                         sizeof(patch_arr) + 1 /* Add one for the byte auto-added in the download function */,
                                         0xfb48, TRUE) == VTSS_RC_OK) {
+
+        vtss_state->phy_state[port_no].micro_patch_crc = 0xfb48;
         VTSS_I("Skipping download of 8051, CRC for Download correct");
         skip_dnload = TRUE;
         //printf("Skipping download of 8051, CRC for Download correct \n");
@@ -3555,11 +4162,7 @@ static vtss_rc viper_revB_8051_patch(vtss_state_t *vtss_state, vtss_port_no_t po
         VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));
 
         if (skip_dnload) {
-            // Enable 8051 clock; SET patch present; disable PRAM clock override and addr. auto-incr; operate at 125 MHz
-            VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0x4098));
-            // Release 8051 SW Reset
-            VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0xc098));
-            VTSS_I("Enable 8051 clk, SET micro-patch present, Release SW Reset");
+            VTSS_I("Skip Patch Dnload: No need to Enable 8051 clk or CLEAR clear-patch present or Release SW Reset");
         } else {
             // Enable 8051 clock; CLEAR patch present; disable PRAM clock override and addr. auto-incr; operate at 125 MHz
             VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0x4018));
@@ -3574,21 +4177,22 @@ static vtss_rc viper_revB_8051_patch(vtss_state_t *vtss_state, vtss_port_no_t po
     // Check that code is downloaded correctly.
     if (skip_dnload) {
         VTSS_I("PHY micro-patch - Already Loaded and Activated! ");
+        return VTSS_RC_OK;
     } else {
         VTSS_RC(vtss_phy_is_8051_crc_ok_private(vtss_state, port_no,
                                                 0xE800,
                                                 sizeof(patch_arr) + 1, // Add one for the byte auto-added in the download function
                                                 0xfb48, FALSE));
-
-        VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));
-        VTSS_RC(vtss_phy_micro_assert_reset(vtss_state, port_no));
-        VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no)); // Switch back to micro/GPIO register-page
-        VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_12, 0x0000));        // Clear all patches
-        VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0x4098));        // Enable 8051 clock; set patch present; disable PRAM clock override and addr. auto-incr; operate at 125 MHz
-        VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0xc098));        // Release 8051 SW Reset
-        VTSS_I("Enable 8051 clk, SET micro-patch present, Release SW Reset");
-        VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
     }
+
+    VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no));
+    VTSS_RC(vtss_phy_micro_assert_reset(vtss_state, port_no));
+    VTSS_RC(vtss_phy_page_gpio(vtss_state, port_no)); // Switch back to micro/GPIO register-page
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_12, 0x0000));        // Clear all patches
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0x4098));        // Enable 8051 clock; set patch present; disable PRAM clock override and addr. auto-incr; operate at 125 MHz
+    VTSS_RC(PHY_WR_PAGE(vtss_state, port_no, VTSS_PHY_GPIO_0, 0xc098));        // Release 8051 SW Reset
+    VTSS_I("Enable 8051 clk, SET micro-patch present, Release SW Reset");
+    VTSS_RC(vtss_phy_page_std(vtss_state, port_no));
 
     return VTSS_RC_OK;
 }

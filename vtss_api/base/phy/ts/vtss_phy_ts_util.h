@@ -1,27 +1,26 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
+
 
 */
 
@@ -31,6 +30,7 @@
 #include <vtss/api/types.h>
 
 #if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+#ifdef VTSS_CHIP_CU_PHY
 extern vtss_rc vtss_phy_loopback_set_private(vtss_state_t *vtss_state, const vtss_port_no_t port_no);
 extern vtss_rc vtss_phy_conf_set_private(vtss_state_t *vtss_state, const vtss_port_no_t port_no);
 extern vtss_rc vtss_phy_conf_1g_set_private(vtss_state_t *vtss_state, const vtss_port_no_t port_no);
@@ -60,6 +60,7 @@ extern vtss_rc vtss_phy_ts_new_spi_mode_set_priv(vtss_state_t *vtss_state,
 extern vtss_rc vtss_phy_ts_csr_set_priv(vtss_state_t *vtss_state,
                                         const vtss_port_no_t port_no,
                                         const vtss_phy_ts_proc_conf_t conf);
+
 #if defined(VTSS_CHIP_CU_PHY) && defined(VTSS_PHY_TS_SPI_CLK_THRU_PPS0)
 extern vtss_rc vtss_phy_ts_channel_id_get_priv(vtss_state_t *vtss_state,
                                                const vtss_port_no_t port_no,
@@ -70,6 +71,12 @@ extern vtss_rc vtss_phy_ts_spi_unpause_priv(vtss_state_t *vtss_state,
                                             const vtss_port_no_t port_no);
 
 #endif /* VTSS_CHIP_CU_PHY && VTSS_PHY_TS_SPI_CLK_THRU_PPS0 */
+
+#if defined(TESLA_ING_TS_ERRFIX) || defined(VIPER_B_FIFO_RESET)
+
+extern BOOL  vtss_phy_ts_algo_execute_check(vtss_state_t *vtss_state,
+                                            const vtss_port_no_t port_no);
+#endif
 
 #ifdef TESLA_ING_TS_ERRFIX
 typedef enum {
@@ -118,7 +125,16 @@ vtss_rc vtss_phy_ts_tesla_tsp_fifo_sync_private(vtss_state_t *vtss_state,
                                                 BOOL                            *OOS);
 
 
-#endif /* TESLA_ING_TS_ERRFIX */
+BOOL vtss_phy_ts_is_oos_recovery_enabled_private (vtss_state_t *vtss_state, vtss_port_no_t  port_no);
+
+vtss_rc vtss_phy_ts_tesla_oos_recovery_disable_priv(vtss_state_t *vtss_state, vtss_port_no_t  port_no, const vtss_debug_printf_t  pr);
+
+BOOL vtss_phy_ts_is_oos_recovery_enabled_private (vtss_state_t *vtss_state, vtss_port_no_t  port_no);
+
+vtss_rc vtss_phy_default_fifo_conf_tesla_oos_get(vtss_state_t *vtss_state, vtss_port_no_t port_no, vtss_phy_ts_fifo_conf_t *fifo_conf_tesla);
+
+
+#endif  /* (TESLA_ING_TS_ERRFIX) */
 
 BOOL  vtss_phy_ts_algo_execute_check(vtss_state_t *vtss_state,
                                      const vtss_port_no_t port_no);
@@ -126,14 +142,17 @@ BOOL  vtss_phy_ts_algo_execute_check(vtss_state_t *vtss_state,
 
 #if defined(VIPER_B_FIFO_RESET)
 vtss_rc vtss_phy_1588_oos_mitigation_steps_private(vtss_state_t *vtss_state,
-                                                   const vtss_port_no_t port_no, 
+                                                   const vtss_port_no_t port_no,
                                                    const vtss_phy_ts_fifo_conf_t   *fifo_conf);
 
 
 vtss_rc vtss_phy_ts_isolate_phy(vtss_state_t *vtss_state,
                                 const vtss_port_no_t port_no);
 
-#endif
+#endif  /* (VIPER_B_FIFO_RESET) */
+
+
+#endif /* VTSS_CHIP_CU_PHY */
 #endif /* VTSS_FEATURE_PHY_TIMESTAMP */
 
 #endif /* _VTSS_PHY_TS_UTIL_H_ */

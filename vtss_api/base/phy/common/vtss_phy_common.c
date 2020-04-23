@@ -1,27 +1,25 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
 
 */
@@ -144,6 +142,30 @@ static BOOL is_1588_reg(u32 reg,u8 dev)
         }
     }
     return FALSE;
+}
+u32 get_port_from_channel_id(struct vtss_state_s    *vtss_state,
+                             const  vtss_port_no_t  port_no,
+                             const  u16             ch_id)
+{
+    u32 port, port_count = 0, base_port = 0;
+    port_count = vtss_state->port_count;
+    u32 port_10g = 0xFFFFFFFF;
+    for (port=0; port<port_count; ++port) {      /* Check all 10G ports to find the port corresponding to the channel-id  */
+        if (vtss_state->phy_10g_state[port].type != VTSS_PHY_TYPE_10G_NONE) {
+            /* the two ports should be on the same Chip
+               for this purpose we compare the phy_api_base_no of the port and port_no being passed to the function.
+               if they are equal then the two ports belong to the same chip */
+            base_port = vtss_state->phy_10g_state[port].phy_api_base_no;
+            if((vtss_state->phy_10g_state[port].channel_id == ch_id) && (base_port == vtss_state->phy_10g_state[port_no].phy_api_base_no)){
+                port_10g = port;
+                break;
+            }
+        }
+    }
+    if(port_10g == 0xFFFFFFFF)
+        VTSS_E("Port no found, port_no %u channel_id %u", port_no, ch_id);
+
+    return port_10g;
 }
 vtss_rc vtss_phy_10g_spi_read_write(vtss_state_t   *vtss_state, 
                                     vtss_port_no_t port_no, 
@@ -516,7 +538,7 @@ vtss_rc csr_rd(vtss_state_t *vtss_state, vtss_port_no_t port_no, u16 mmd, BOOL i
             VTSS_RC(mmd_read_func(vtss_state, p, mmd, addr, &reg_value[0]));
             *value = (u32)reg_value[0];
         }
-        VTSS_I("MMD RD port %u is_32_bit %s : reg %0xX%0x = 0x%0x",port_no,is32?"TRUE":"FALSE",mmd,addr,*value);
+        VTSS_D("MMD RD port %u is_32_bit %s : reg %0xX%0x = 0x%0x",port_no,is32?"TRUE":"FALSE",mmd,addr,*value);
     } else {
 #ifdef VTSS_CHIP_CU_PHY
         VTSS_RC(get_base_adr(vtss_state, port_no, mmd, addr, &base_addr, &target, &offset, &use_base_port));
@@ -591,7 +613,7 @@ vtss_rc csr_wr(vtss_state_t *vtss_state, vtss_port_no_t port_no, u16 mmd, BOOL i
         } else {
             VTSS_RC(mmd_write_func(vtss_state, p, mmd, addr, reg_value_lower));
         }
-        VTSS_I("MMD WR port %u is_32_bit %s : reg %0xX%0x = 0x%0x",port_no,is32?"TRUE":"FALSE",mmd,addr,value);
+        VTSS_D("MMD WR port %u is_32_bit %s : reg %0xX%0x = 0x%0x",port_no,is32?"TRUE":"FALSE",mmd,addr,value);
     } else {
         // 1G PHY access
 #ifdef VTSS_CHIP_CU_PHY
@@ -971,6 +993,36 @@ vtss_rc phy_10g_mac_tx_rx_ena(vtss_state_t *vtss_state,
 }
 #endif
 
+vtss_rc phy_mac_fc_buffer_reset(vtss_state_t *vtss_state,
+                                vtss_port_no_t port_no)
+{
+    BOOL phy10g;
+
+    /* In case of warmstart, there is no need to reset fc butter. Return silently.*/
+    if (vtss_state->sync_calling_private) {
+        return VTSS_RC_OK;
+    }
+
+    VTSS_RC(phy_type_get(vtss_state, port_no, &phy10g));
+#if defined(VTSS_CHIP_10G_PHY)
+    if (phy10g &&
+        (vtss_state->phy_10g_state[port_no].mode.oper_mode == VTSS_PHY_WAN_MODE)) {
+#if defined(VTSS_FEATURE_MACSEC)
+        if (vtss_state->macsec_conf[port_no].glb.init.enable == TRUE) {
+            CSR_WARM_WRM(port_no, VTSS_FC_BUFFER_CONFIG_FC_ENA_CFG, 0,
+                         VTSS_F_FC_BUFFER_CONFIG_FC_ENA_CFG_RX_ENA);
+
+            CSR_WARM_WRM(port_no, VTSS_FC_BUFFER_CONFIG_FC_ENA_CFG,
+                         VTSS_F_FC_BUFFER_CONFIG_FC_ENA_CFG_RX_ENA,
+                         VTSS_F_FC_BUFFER_CONFIG_FC_ENA_CFG_RX_ENA);
+            VTSS_I("FC Buffer Rx Enable reset");
+        }
+#endif
+    }
+#endif
+
+    return VTSS_RC_OK;
+}
 
 /* 'enable' is used for Mac enable or disable.
    'macsec_enable' signifies whether macsec was or is enabled or not.
@@ -1364,3 +1416,4 @@ vtss_rc vtss_statistics_get(const vtss_inst_t inst,
 
     return rc;
 }
+

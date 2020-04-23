@@ -1,27 +1,26 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
+
 
 */
 //***************************************************************************
@@ -205,6 +204,7 @@ vtss_rc mmd_write(const vtss_port_no_t  port_no,
 // Function for initializing the hardware board.
 int tesla_board_init(int argc, const char **argv, vtss_appl_board_t *board)
 {
+    printf("Board Init: tesla_board_init \n");
     board->port_count = VTSS_PORTS; //Setup the number of port used 
 
     board->port_interface = port_interface; // Define the port interface
@@ -216,6 +216,8 @@ int tesla_board_init(int argc, const char **argv, vtss_appl_board_t *board)
     board->init.init_conf->mmd_write = mmd_write; // Set pointer to the MIIM write function for this board.
 #endif /* VTSS_CHIP_10G_PHY */
 
+    printf("Board Init: Set miim functions \n");
+
 
         if (argc != 2) {
             printf("Usage  : %s <Rabbit IP Address> \n"  , argv[0]);
@@ -223,7 +225,7 @@ int tesla_board_init(int argc, const char **argv, vtss_appl_board_t *board)
             exit(EXIT_SUCCESS);
         }
 
-        socket_init(argv[1], CPU_BOARD_PORT); // Connect to the CPU board
+    socket_init(argv[1], CPU_BOARD_PORT); // Connect to the CPU board
 	if (board->init.init_conf->warm_start_enable != TRUE) {
 		// Set signal detect polarity (for SFPs for the board)
 		miim_write(NULL, 0, 31, 1);

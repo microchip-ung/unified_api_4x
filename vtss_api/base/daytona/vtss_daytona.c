@@ -1,27 +1,25 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
 
 */
@@ -2111,6 +2109,38 @@ static vtss_rc daytona_debug_wis(vtss_state_t *vtss_state,
     return VTSS_RC_OK;
 }
 
+static vtss_rc daytona_custom_channel_mode_set(vtss_state_t *vtss_state,
+                                               u16 channel, vtss_config_mode_t conf_mode,
+                                               u32 two_lane_upi)
+{
+    vtss_xfi_cfg_t           xfi_cfg;
+    vtss_pcs_10gbase_r_cfg_t pcs_10gbase_r_cfg;
+    vtss_port_no_t port_no = channel + 2;
+    u32 target;
+    BOOL enable;
+
+    VTSS_RC(daytona_port_2_target(vtss_state, port_no, DAYTONA_BLOCK_IP_1588, &target));
+    xfi_cfg = vtss_state->xfi_state[port_no].xfi_cfg;
+    pcs_10gbase_r_cfg = vtss_state->pcs_10gbase_r_state[port_no].pcs_10gbase_r_cfg;
+
+    VTSS_RC(daytona_interface_conf_mode_set(vtss_state, channel, conf_mode, two_lane_upi, 0, 0));
+    VTSS_RC(daytona_conf_mode_set(vtss_state, channel, conf_mode, two_lane_upi));
+
+    vtss_state->xfi_state[port_no].xfi_cfg = xfi_cfg;
+    vtss_state->pcs_10gbase_r_state[port_no].pcs_10gbase_r_cfg = pcs_10gbase_r_cfg;
+
+    VTSS_RC(VTSS_FUNC_COLD(cil.xfi_config_set, port_no));
+    VTSS_RC(VTSS_FUNC_COLD(cil.pcs_10gbase_r_config_set, port_no));
+
+    enable = vtss_state->phy_ts_port_conf[port_no].port_ena;
+    /* update the interface control register */
+    DAYTONA_WRM(VTSS_IP_1588_IP_1588_TOP_CFG_STAT_INTERFACE_CTL(target),
+            VTSS_F_IP_1588_IP_1588_TOP_CFG_STAT_INTERFACE_CTL_BYPASS(~enable),
+            VTSS_M_IP_1588_IP_1588_TOP_CFG_STAT_INTERFACE_CTL_BYPASS);
+
+    return VTSS_RC_OK;
+}
+
 static vtss_rc daytona_debug_rab(vtss_state_t *vtss_state,
                                  const vtss_debug_printf_t pr,
                                  const vtss_debug_info_t   *const info)
@@ -4038,7 +4068,7 @@ vtss_rc vtss_daytona_inst_create(vtss_state_t *vtss_state)
     func->pmtick_enable_set    = daytona_pmtick_enable_set;
     func->channel_mode_set     = daytona_channel_mode_set;
     func->fast_regs_conf_get   = daytona_fast_regs_conf_get;
-
+    func->custom_channel_mode_set = daytona_custom_channel_mode_set;
     /* State data */
 #if defined(VTSS_GPIOS)
     vtss_state->misc.gpio_count = VTSS_GPIOS;

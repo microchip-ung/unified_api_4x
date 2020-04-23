@@ -1,27 +1,25 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
 
 */
@@ -161,6 +159,7 @@ vtss_rc vtss_statistics_get(const vtss_inst_t inst,
 vtss_rc vtss_phy_10g_spi_read_write(vtss_state_t *vtss_state, vtss_port_no_t port_no, BOOL read, u8 dev, u16 reg_num, u32 *const data);
 vtss_port_no_t base_port(vtss_state_t *vtss_state, vtss_port_no_t port_no);
 vtss_port_no_t pma_port_no(vtss_state_t *vtss_state, vtss_port_no_t port_no);
+u32 get_port_from_channel_id(struct vtss_state_s *vtss_state, const vtss_port_no_t port_no, const u16 ch_id);
 #endif /* #if defined(VTSS_CHIP_10G_PHY) */
 
 /* SPI callout function for 1G Phys */
@@ -168,6 +167,7 @@ vtss_rc vtss_phy_1g_spi_read_write(vtss_state_t *vtss_state, vtss_port_no_t port
 
 /* Enable or Disable MAC block */
 vtss_rc phy_10g_mac_conf(vtss_state_t *vtss_state, vtss_port_no_t port_no,BOOL enable, BOOL macsec_ena);
+vtss_rc phy_mac_fc_buffer_reset(vtss_state_t *vtss_state, vtss_port_no_t port_no);
 
 /* Enable or Disable macsec clock */
 vtss_rc phy_10g_macsec_clk_en(vtss_state_t *vtss_state, vtss_port_no_t port_no, BOOL enable);
@@ -178,6 +178,7 @@ vtss_rc phy_10g_mac_tx_rx_ena(vtss_state_t *vtss_state, vtss_port_no_t port_no, 
 #if defined(VTSS_FEATURE_MACSEC)
 /* Set FC Buffer frame gap compensation */
 vtss_rc vtss_fc_buffer_frm_gap_set(vtss_state_t *vtss_state, vtss_port_no_t port_no, u8 frm_gap);
+
 #endif
 #ifdef __cplusplus
 }

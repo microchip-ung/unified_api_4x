@@ -1,27 +1,25 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
  
 
 */
@@ -1121,6 +1119,7 @@ typedef enum {
     CLI_PARM_TYPE_CHANNEL_MODE,
     CLI_PARM_TYPE_CHANNEL_XAUIMODE,
     CLI_PARM_TYPE_CHANNEL_CONFIG_EVINIT,
+    CLI_PARM_TYPE_CHANNEL_MODE_SAVE_1588,
 	CLI_PARM_TYPE_CHANNEL_CONFIG_XCLK,
     CLI_PARM_TYPE_CHANNEL_CONFIG_X4_CASE,
     CLI_PARM_TYPE_WARM_START_SCRIPT,
@@ -2320,7 +2319,7 @@ static cli_cmd_t cli_cmd_table[] = {
         CLI_CMD_ID_PMTICK_CONFIG,
     },
     {
-        "channel_mode <channel_num> <channel_mode> <xaui_mode> <ev_init> <xclk> [<x4_case>]",
+        "channel_mode <channel_num> <channel_mode> <xaui_mode> <ev_init> [save_1588] <xclk> [<x4_case>]",
         "Set the operating mode and XAUI mode both channels\n",
         CLI_CMD_ID_CHANNEL_MODE_CONFIG,
     },
@@ -2677,6 +2676,13 @@ static cli_parm_t cli_parm_table[] = {
         "<ev_init>",
         "Enable/Disable Validation board initialization 0-Disable, 1-Enable\n",
         CLI_PARM_TYPE_CHANNEL_CONFIG_EVINIT,
+        CLI_CMD_ID_CHANNEL_MODE_CONFIG,
+        CLI_PARM_FLAG_SET
+    },
+    {
+        "save_1588",
+        "Restore 1588 configuration during daytona channel mode set 1-Save 1588 0-Reset 1588\n",
+        CLI_PARM_TYPE_CHANNEL_MODE_SAVE_1588,
         CLI_CMD_ID_CHANNEL_MODE_CONFIG,
         CLI_PARM_FLAG_SET
     },
@@ -5373,6 +5379,7 @@ typedef struct {
     u32 channel_mode;
     u32 channel_xauimode;
     u32 ev_init;
+    u32 save_1588;
 	u32 xclk;
     u32 x4_case;
     u32 wm_file_store;
@@ -8311,6 +8318,9 @@ static int cli_parse_parm(cli_parm_type_t type, cli_cmd_t *cli_cmd,
         break;
     case CLI_PARM_TYPE_CHANNEL_CONFIG_EVINIT:
         error =  cli_parse_ulong(cmd, &req->ev_init, 0, 1);
+        break;
+    case CLI_PARM_TYPE_CHANNEL_MODE_SAVE_1588:
+        error = cli_parse_ulong(cmd, &req->save_1588, 0, 1);
         break;
 	case CLI_PARM_TYPE_CHANNEL_CONFIG_XCLK:
         error =  cli_parse_ulong(cmd, &req->xclk, 156, 161);
@@ -16055,7 +16065,11 @@ static void cli_cmd_channel_mode_config(cli_req_t *req)
         }
     }
 #endif
-     vtss_channel_mode_set(req->api_inst, req->channel_num , req->channel_mode, req->channel_xauimode,req->xclk,req->x4_case);
+     if (req->save_1588) {
+         vtss_custom_channel_mode_set(req->api_inst, req->channel_num , req->channel_mode, req->channel_xauimode);
+     } else {
+         vtss_channel_mode_set(req->api_inst, req->channel_num , req->channel_mode, req->channel_xauimode, req->xclk,req->x4_case);
+     }
 }
 static void cli_cmd_fifo_oos_reset(cli_req_t *req)
 {

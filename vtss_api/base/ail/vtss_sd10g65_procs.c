@@ -1,29 +1,27 @@
 /*
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+Copyright (c) 2004-2018 Microsemi Corporation "Microsemi"
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
- */
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
 
 /*---------------------------------------------------------------------------
- * $HeadURL: svn://svn-de.vitesse.com/svn-de/vtslibs/vts_ute_tcllib/tags/UTE_release_vts_ute_tcllib_20170214_trunk_venne/api_c/vtss_sd10g65_procs.c $
+ * $HeadURL: svn://svn-de.vitesse.com/svn-de/vtslibs/vts_ute_tcllib/tags/UTE_release_vts_ute_tcllib_20180312_trunk_bjo/api_c/vtss_sd10g65_procs.c $
  *---------------------------------------------------------------------------*/
 
 /* ================================================================= *
@@ -48,7 +46,7 @@
 #include <stdio.h>
 
 #ifdef USE_TCL_STUBS
-#include "sd10g65_webstax_defines.h"
+#include "ute_webstax_defines.h"
 #else
 #include <vtss/api/types.h>
 #include "vtss_state.h"
@@ -342,6 +340,7 @@ static vtss_rc sd10g65_synth_mult_calc(vtss_sd10g65_f_pll_t f_pll_in,
     vtss_sd10g65_freq_dec_bypass_rslt_t     bypass_settings;
     u64 num_in_tmp;
     u64 div_in_tmp;
+    u64 dr_khz;
     u16 mult_sy;
 
     vtss_rc rc;
@@ -365,14 +364,16 @@ static vtss_rc sd10g65_synth_mult_calc(vtss_sd10g65_f_pll_t f_pll_in,
     num_in_tmp = (u64)f_pll_in.f_pll_khz * (u64)f_pll_in.ratio_num;
     div_in_tmp = (u64)f_pll_in.ratio_den * 2500000;
 
-    if ((num_in_tmp) < VTSS_DIV64((u64)2*div_in_tmp,3)) {
+    dr_khz = VTSS_DIV64((u64)f_pll_in.f_pll_khz * (u64)f_pll_in.ratio_num, (u64)f_pll_in.ratio_den);
+
+    if (dr_khz < ((u64) 2.5e6 * 2/3)) {
         VTSS_E("Target frequency to small. Target frequency for the synthesizer must be 2/3 * 2.5 GHz <= f <= 4/3 * 10Ghz\n");
         return VTSS_RC_ERROR;
-    } else if ((num_in_tmp) > VTSS_DIV64((u64)16*div_in_tmp,3)) {
+    } else if (dr_khz > ((u64) 2.5e6 * 16/3)) {
         VTSS_E("Target frequency to high. Target frequency for the synthesizer must be 2/3 * 2.5 GHz <= f <= 4/3 * 10Ghz\n");
         return VTSS_RC_ERROR;
     } else {
-        if (num_in_tmp < VTSS_DIV64((u64)4*div_in_tmp,3)) {
+        if (dr_khz < ((u64) 2.5e6 * 4/3)) {
             /* sample frequncy below 3.33GHz -> use 2/3 * 2G5 .. 4/3 * 2G5 */
             rc |= sd10g65_synth_settings_calc(num_in_tmp, (u64)div_in_tmp, &synth_settings);
             ret_val->synth_fbdiv_sel = 0;
@@ -381,7 +382,7 @@ static vtss_rc sd10g65_synth_mult_calc(vtss_sd10g65_f_pll_t f_pll_in,
             ret_val->tx_synth_cs_speed = 0;
             ret_val->rx_synth_fb_step  = 3;
             ret_val->rx_synth_i2_step  = 0;
-        } else if(num_in_tmp < VTSS_DIV64((u64)8*div_in_tmp,3)) {
+        } else if(dr_khz < ((u64) 2.5e6 * 8/3)) {
             /* sample frequncy between 3.33GHz and 6.66Ghz -> use 2/3 * 5G .. 4/3 * 5G */
             rc |= sd10g65_synth_settings_calc(num_in_tmp, (u64)2*div_in_tmp, &synth_settings);
             ret_val->synth_fbdiv_sel = 1;
@@ -400,7 +401,7 @@ static vtss_rc sd10g65_synth_mult_calc(vtss_sd10g65_f_pll_t f_pll_in,
             ret_val->rx_synth_fb_step  = 0;
             ret_val->rx_synth_i2_step  = 0;
         }
-        if (num_in_tmp < ((u64)2*div_in_tmp)) {
+        if (dr_khz < ((u64) 5e6)) {
             /* sample frequncy < 5 GHz */
             ret_val->synth_speed_sel = 1;
         } else {
@@ -1963,10 +1964,10 @@ vtss_rc vtss_calc_sd10g65_setup_df2f(const vtss_sd10g65_setup_df2f_args_t config
 
     if (config.use_par_clk == FALSE) {
         if (f_out_khz_plain > 500000) {
-            VTSS_E("Trageted output frequency to high. Must not be above 500 MHz");
+            VTSS_E("Targeted output frequency to high. Must not be above 500 MHz");
             return VTSS_RC_ERROR;
         } else if (f_out_khz_plain < 1000) {
-            VTSS_E("Trageted output frequency to low. Must not be below  1 MHz");
+            VTSS_E("Targeted output frequency to low. Must not be below  1 MHz");
             return VTSS_RC_ERROR;
         } else {
             /*  to get low jitter use SER baudrate of 9..10.8GBps */
@@ -2122,10 +2123,10 @@ vtss_rc vtss_calc_sd10g65_setup_df2f(const vtss_sd10g65_setup_df2f_args_t config
     } else {  /* config.use_par_clk == TRUE  -- We want to have the parrallel clock towards the core configured*/
         use_clk_gen = FALSE;
         if (f_out_khz_plain > 400000) {
-            VTSS_E("Trageted parallel clock frequency to high. Must not be above 400 MHz");
+            VTSS_E("Targeted parallel clock frequency to high. Must not be above 400 MHz");
             return VTSS_RC_ERROR;
         } else if (f_out_khz_plain < 31250) {
-            VTSS_E("Trageted parallel clock frequency to low. Must not be below  31.25 MHz");
+            VTSS_E("Targeted parallel clock frequency to low. Must not be below  31.25 MHz");
             return VTSS_RC_ERROR;
         } else {
             if (f_out_khz_plain < 41667) {

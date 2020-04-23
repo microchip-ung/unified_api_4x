@@ -1,31 +1,28 @@
 /*
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+Copyright (c) 2004-2018 Microsemi Corporation "Microsemi"
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
-
- */
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
 
 
 /*---------------------------------------------------------------------------
- * $HeadURL: svn://svn-de.vitesse.com/svn-de/vtslibs/vts_ute_tcllib/tags/UTE_release_vts_ute_tcllib_20170214_trunk_venne/api_c/vtss_sd10g65_apc_procs.c $
+ * $HeadURL: svn://svn-de.vitesse.com/svn-de/vtslibs/vts_ute_tcllib/tags/UTE_release_vts_ute_tcllib_20180312_trunk_bjo/api_c/vtss_sd10g65_apc_procs.c $
  *---------------------------------------------------------------------------*/
 
 /* ================================================================= *
@@ -50,7 +47,7 @@
 #include <stdio.h>
 
 #ifdef USE_TCL_STUBS
-#include "sd10g65_webstax_defines.h"
+#include "ute_webstax_defines.h"
 #else
 #include <vtss/api/types.h>
 #include "vtss_state.h" 
@@ -171,7 +168,7 @@ vtss_rc vtss_sd10g65_setup_apc_args_init(vtss_sd10g65_setup_apc_args_t     *cons
     init_val->force_eqz_l_val = 32;
     init_val->force_eqz_c     = FALSE;
     init_val->force_eqz_c_val = 16;
-    init_val->offset_guard    = FALSE;
+    init_val->offset_guard    = TRUE;
     init_val->lc_softctrl     = FALSE;
     init_val->throttle_mode   = FALSE;
     init_val->ld_lev_ini      = FALSE;
@@ -212,11 +209,16 @@ vtss_rc vtss_calc_sd10g65_setup_apc(const vtss_sd10g65_setup_apc_args_t config,
     vtss_sd10g65_apc_preset_struct_t preset;
     vtss_apc_param_set_t apc_set[apc_param];
     vtss_sd10g65_f_pll_t           cfg_f_pll = config.f_pll;
-    u32     f_pll_khz_plain;
+    u32     f_pll_khz_plain, optimize_for_1g = FALSE;
     u8      thresh_init;
 
     f_pll_khz_plain = (u32) (VTSS_DIV64( ((u64) cfg_f_pll.f_pll_khz * (u64) cfg_f_pll.ratio_num), (u64) cfg_f_pll.ratio_den));
     rc = vtss_sd10g65_apc_set_default_preset_values(config.chip_name, &preset);
+
+    if (cfg_f_pll.f_pll_khz <= 2.5e6 && config.chip_name != VTSS_SD10G65_CHIP_VENICE) {
+        optimize_for_1g = TRUE;
+        preset.dfe1_max =  68;  // 1G optimization
+    }
 
     if ((config.chip_name != VTSS_SD10G65_CHIP_VENICE_C) &&
         (config.chip_name != VTSS_SD10G65_CHIP_JAGUAR2C) &&
@@ -371,15 +373,15 @@ vtss_rc vtss_calc_sd10g65_setup_apc(const vtss_sd10g65_setup_apc_args_t config,
     apc_set[VTSS_SD10G65_APC_PARAM_DFE1].ini =  64;
     apc_set[VTSS_SD10G65_APC_PARAM_DFE1].min =  preset.dfe1_min;
 
-    apc_set[VTSS_SD10G65_APC_PARAM_DFE2].max =  48;
+    apc_set[VTSS_SD10G65_APC_PARAM_DFE2].max =  optimize_for_1g ? 36 : 48; // 1G optimization
     apc_set[VTSS_SD10G65_APC_PARAM_DFE2].ini =  32;
     apc_set[VTSS_SD10G65_APC_PARAM_DFE2].min =  0;
 
-    apc_set[VTSS_SD10G65_APC_PARAM_DFE3].max =  31;
+    apc_set[VTSS_SD10G65_APC_PARAM_DFE3].max =  optimize_for_1g ? 20 : 31; // 1G optimization;
     apc_set[VTSS_SD10G65_APC_PARAM_DFE3].ini =  16;
     apc_set[VTSS_SD10G65_APC_PARAM_DFE3].min =  0;
 
-    apc_set[VTSS_SD10G65_APC_PARAM_DFE4].max =  31;
+    apc_set[VTSS_SD10G65_APC_PARAM_DFE4].max =  optimize_for_1g ? 20 : 31; // 1G optimization;
     apc_set[VTSS_SD10G65_APC_PARAM_DFE4].ini =  16;
     apc_set[VTSS_SD10G65_APC_PARAM_DFE4].min =  0;
 

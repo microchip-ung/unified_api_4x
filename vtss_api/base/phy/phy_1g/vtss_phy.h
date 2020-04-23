@@ -1,27 +1,23 @@
 /*
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
-
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
-
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
 
 */
@@ -70,6 +66,7 @@ typedef enum {
 #define VTSS_PHY_TESLA_REV_A 0
 #define VTSS_PHY_TESLA_REV_B 1
 #define VTSS_PHY_TESLA_REV_D 2
+#define VTSS_PHY_TESLA_REV_E 3
 
 // Viper family
 #define VTSS_PHY_VIPER_REV_A 0
@@ -120,6 +117,7 @@ typedef enum {
     VTSS_SERDES_LB_EQUIPMENT = 8,
 } serdes_lpback_types_t;
 
+#define VTSS_FORCED_LONG_LINKUP_COUNTER_WINDOW   (3)  /* Max Offset Part of Work-Around for Long Linkup Time in Forced Mode */
 
 typedef struct _vtss_phy_port_state_info_t {
     vtss_phy_reset_conf_t  reset;      /* Reset setup */
@@ -137,13 +135,13 @@ typedef struct _vtss_phy_port_state_info_t {
 #if VTSS_PHY_OPT_VERIPHY
     vtss_veriphy_task_t    veriphy;  /* VeriPHY task */
 #endif /* VTSS_PHY_OPT_VERIPHY */
-    BOOL                   ena_forced_1000_mode_prev;  // Signaling that someone set 17E2.5, Setting for Forced-1000BaseT Enable */
-    BOOL                   ena_forced_1000_mode_curr;  // Signaling that someone set 17E2.5, Setting for Forced-1000BaseT Enable */
+    BOOL                   ena_forced_1000_mode_prev;  // Signaling that someone set 17E2.5, Setting for Forced-1000BaseT Enable
+    BOOL                   ena_forced_1000_mode_curr;  // Signaling that someone set 17E2.5, Setting for Forced-1000BaseT Enable
     vtss_phy_loopback_t    loopback; // Loop back
     serdes_lpback_types_t  prev_mac_serdes_lpback;
     serdes_lpback_types_t  prev_media_serdes_lpback;
     BOOL                   cu_sfp_config_complete;
-    BOOL                   conf_none; // Signaling the no PHY is found for this port */
+    BOOL                   conf_none; // Signaling the no PHY is found for this port
     vtss_phy_event_t       ev_mask;    // 32-bit Mask for interrupt events (Reg25) and Ext Int Reg28E2)
     u16                    int_mask_reg;  // Mirror of the interrupt mask register
     u16                    ext_int_mask_reg;  // Mirror of the Extended Interrupt mask register
@@ -159,6 +157,7 @@ typedef struct _vtss_phy_port_state_info_t {
     // Some registers requires that the phy port is reset before a new configure if applied, but during warm start we don't want to reset the phy port (giving traffic loss) if the registers in fact haven't changed. In order to determine if registers have changed during warm start we use this global variable to signal that registers have in fact changed.
     BOOL                   warm_start_reg_changed;
     u16                    mac_block_mtu; /* MAC Block MTU  */
+    u16                    forced_long_linkup_counter;    /* Delay for Forced Mode Work-Around for Forced Mode Long Linkup Time issue  */
 } vtss_phy_port_state_t;
 
 #define MAX_REGISTERS_PER_PAGE  32
@@ -356,6 +355,7 @@ typedef struct {
 #define  VTSS_F_PHY_MODE_CONTROL_LOOP             VTSS_PHY_BIT(14)
 #define  VTSS_F_PHY_MODE_CONTROL_AUTO_NEG_ENA     VTSS_PHY_BIT(12)
 #define  VTSS_F_PHY_MODE_CONTROL_POWER_DOWN       VTSS_PHY_BIT(11)
+#define  VTSS_F_PHY_MODE_CONTROL_MAC_ISOLATE      VTSS_PHY_BIT(10)
 #define  VTSS_F_PHY_MODE_CONTROL_RESTART_AUTO_NEG VTSS_PHY_BIT(9)
 #define  VTSS_F_PHY_MODE_CONTROL_UNIDIRECTIONAL   VTSS_PHY_BIT(5)
 
@@ -476,10 +476,12 @@ typedef struct {
 
 // Register 30 + Bit fields
 #define VTSS_PHY_LED_BEHAVIOR  VTSS_PHY_PAGE_STANDARD, 30
-#define VTSS_F_PHY_LED_BEHAVIOR_LED_PULSING_ENABLE VTSS_PHY_BIT(12)
+#define VTSS_F_PHY_LED_BEHAVIOR_OOS_RECOVERY_ENABLE    VTSS_PHY_BIT(13)
+#define VTSS_F_PHY_LED_BEHAVIOR_LED_PULSING_ENABLE     VTSS_PHY_BIT(12)
 
 //Register 31
-#define VTSS_PHY_PAGE    31
+#define  VTSS_PHY_PAGE          VTSS_PHY_PAGE_STANDARD, 31 
+
 
 // ** Register definitions -  EXT1 page**
 
@@ -540,6 +542,11 @@ typedef struct {
 
 // Register 29E1 + Bit fields
 #define EPG_CTRL_REG_1 VTSS_PHY_PAGE_EXTENDED, 29
+#define EPG_CTRL_REG_1_EPG_ENABLE              VTSS_PHY_BIT(15)
+#define EPG_CTRL_REG_1_EPG_RUN_STOP            VTSS_PHY_BIT(14)
+#define EPG_CTRL_REG_1_IPG_8192NSEC            VTSS_PHY_BIT(10)
+#define EPG_CTRL_REG_1_RANDOM_PAYLOAD_PATTERN  VTSS_PHY_BIT(1)
+#define EPG_CTRL_REG_1_BAD_FRAME_FCS_GEN       VTSS_PHY_BIT(0)
 
 // Register 30E1 + Bit fields
 #define EPG_CTRL_REG_2 VTSS_PHY_PAGE_EXTENDED, 30
@@ -665,6 +672,7 @@ typedef struct {
 // Register 22E3
 #define VTSS_PHY_MEDIA_SERDES_TX_CRC_ERROR_COUNTER  VTSS_PHY_PAGE_EXTENDED_3, 22
 #define VTSS_M_PHY_MEDIA_SERDES_TX_CRC_ERROR_COUNTER_CNT    VTSS_PHY_ENCODE_BITMASK(0, 7)
+#define VTSS_F_PHY_MEDIA_SERDES_TX_CRC_ERROR_COUNTER_TX_PREAMBLE_FIX    VTSS_PHY_BIT(13)
 
 // Register 23E3
 #define VTSS_PHY_MEDIA_SERDES_PCS_CONTROL    VTSS_PHY_PAGE_EXTENDED_3, 23
@@ -682,6 +690,9 @@ typedef struct {
 #define VTSS_PHY_MEDIA_SERDES_PCS_STATUS     VTSS_PHY_PAGE_EXTENDED_3, 24
 #define VTSS_F_PHY_MEDIA_SERDES_PCS_STATUS_100BASEFX_PROTO_XFER_LINK_STATUS VTSS_PHY_BIT(13)
 #define VTSS_F_PHY_MEDIA_SERDES_PCS_STATUS_10MB_LINK_STATUS                 VTSS_PHY_BIT(12)
+#define VTSS_M_PHY_MEDIA_SERDES_PCS_STATUS_REMOTE_FAULT_FROM_LP             VTSS_PHY_ENCODE_BITMASK(9, 8)
+#define VTSS_F_PHY_MEDIA_SERDES_PCS_STATUS_LP_ASYM_PAUSE                    VTSS_PHY_BIT(7)
+#define VTSS_F_PHY_MEDIA_SERDES_PCS_STATUS_LP_SYM_PAUSE                     VTSS_PHY_BIT(6)
 #define VTSS_F_PHY_MEDIA_SERDES_PCS_STATUS_LP_FULL_DUPLEX                   VTSS_PHY_BIT(5)
 #define VTSS_F_PHY_MEDIA_SERDES_PCS_STATUS_LP_HALF_DUPLEX                   VTSS_PHY_BIT(4)
 #define VTSS_F_PHY_MEDIA_SERDES_PCS_STATUS_LP_ANEG_CAP                      VTSS_PHY_BIT(3)
@@ -825,6 +836,10 @@ typedef struct {
 
 // Register 28G + Bit fields
 #define VTSS_PHY_TEMP_VAL VTSS_PHY_PAGE_GPIO, 28
+
+// Register 30G + Bit fields
+#define VTSS_PHY_EXTENDED_REVISION             VTSS_PHY_PAGE_GPIO, 30
+#define VTSS_F_PHY_EXTENDED_REVISION_TESLA_E   VTSS_PHY_BIT(0)
 
 
 // ** Register definitions -  TEST page**

@@ -1,27 +1,25 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
 
 */
@@ -696,6 +694,24 @@ static vtss_rc jr2_gpio_event_enable(vtss_state_t          *vtss_state,
     return VTSS_RC_OK;
 }
 
+static vtss_rc jr2_sgpio_init(vtss_state_t *vtss_state)
+{
+    u32  grp, bit;
+
+    // Gotta change the interrupt type for all SGPIOs from its default,
+    // which is level, to something else to avoid spurious interrupts
+    // when failing or unable (due to board layout) to initialize the
+    // polarity of the level interrupts correct.
+    for (grp = 0; grp < vtss_state->misc.sgpio_group_count; grp++) {
+        for (bit = 0; bit < 4; bit++) {
+            // Enable rising edge triggered interrupt
+            JR2_WR(VTSS_DEVCPU_GCB_SIO_CTRL_SIO_INTR_TRIGGER0(grp, bit), 0xFFFFFFFF);
+            JR2_WR(VTSS_DEVCPU_GCB_SIO_CTRL_SIO_INTR_TRIGGER1(grp, bit), 0xFFFFFFFF);
+        }
+    }
+    return VTSS_RC_OK;
+}
+
 static vtss_rc jr2_sgpio_event_poll(vtss_state_t *vtss_state,
                                      const vtss_chip_no_t     chip_no,
                                      const vtss_sgpio_group_t group,
@@ -704,7 +720,7 @@ static vtss_rc jr2_sgpio_event_poll(vtss_state_t *vtss_state,
 {
     u32 i, val;
 
-    JR2_RD(VTSS_DEVCPU_GCB_SIO_CTRL_SIO_INTR(group, bit), &val);
+    JR2_RD(VTSS_DEVCPU_GCB_SIO_CTRL_SIO_INTR_IDENT(group, bit), &val);
     JR2_WR(VTSS_DEVCPU_GCB_SIO_CTRL_SIO_INTR(group, bit), val);  /* Clear pending */
 
     /* Setup serial IO port enable register */
@@ -722,20 +738,19 @@ static vtss_rc jr2_sgpio_event_enable(vtss_state_t *vtss_state,
                                        const u32                bit,
                                        const BOOL               enable)
 {
-    u32 i;
+    u32 i, mask = (1 << port);
 
     if (enable) {
-        JR2_WRM(VTSS_DEVCPU_GCB_SIO_CTRL_SIO_INTR_ENA(group), 1<<port, 1<<port);
+        JR2_WRM(VTSS_DEVCPU_GCB_SIO_CTRL_SIO_INTR(group, bit), mask, mask); // Clear any pending interrupts, so we don't get any spurious interrupt when we enable.
+        JR2_WRM(VTSS_DEVCPU_GCB_SIO_CTRL_SIO_INTR_ENA(group), mask, mask);  // Enable only the bit in question.
         JR2_WRM(VTSS_DEVCPU_GCB_SIO_CTRL_SIO_CFG(group), 
                 VTSS_F_DEVCPU_GCB_SIO_CTRL_SIO_CFG_SIO_GPIO_INTR_ENA(1<<bit),
-                VTSS_M_DEVCPU_GCB_SIO_CTRL_SIO_CFG_SIO_GPIO_INTR_ENA);
+                VTSS_F_DEVCPU_GCB_SIO_CTRL_SIO_CFG_SIO_GPIO_INTR_ENA(1 << bit)); // Enable only the bit in question.
 
-        /* Enable falling edge triggered interrupt */
-        JR2_WRM(VTSS_DEVCPU_GCB_SIO_CTRL_SIO_INTR_TRIGGER1(group, bit), 1<<port, 1<<port);
     } else {
 
         VTSS_D("Disable port:%d, group:%d, bit:%d", port, group, bit);
-        JR2_WRM(VTSS_DEVCPU_GCB_SIO_CTRL_SIO_INTR_ENA(group), 0, 1<<port);
+        JR2_WRM(VTSS_DEVCPU_GCB_SIO_CTRL_SIO_INTR_ENA(group), 0, mask);
         for (i=0; i<32; ++i) {
             if (vtss_state->misc.sgpio_event_enabled[chip_no][group].enable[i][bit]) {
                 break;
@@ -743,8 +758,8 @@ static vtss_rc jr2_sgpio_event_enable(vtss_state_t *vtss_state,
         }
         if (i == 32) {
             JR2_WRM(VTSS_DEVCPU_GCB_SIO_CTRL_SIO_CFG(group),
-                    VTSS_F_DEVCPU_GCB_SIO_CTRL_SIO_CFG_SIO_GPIO_INTR_ENA(0),
-                    VTSS_M_DEVCPU_GCB_SIO_CTRL_SIO_CFG_SIO_GPIO_INTR_ENA);
+                    0,
+                    VTSS_F_DEVCPU_GCB_SIO_CTRL_SIO_CFG_SIO_GPIO_INTR_ENA(1 << bit)); // Clear only the bit in question.
         }
     }
 
@@ -1015,6 +1030,8 @@ vtss_rc vtss_jr2_misc_init(vtss_state_t *vtss_state, vtss_init_cmd_t cmd)
         vtss_state->fan.cool_lvl_set    = jr2_fan_cool_lvl_set;
         vtss_state->fan.rotation_get    = jr2_fan_rotation_get;
 #endif /* VTSS_FEATURE_FAN */
+    } else if (cmd == VTSS_INIT_CMD_INIT) {
+        VTSS_RC(jr2_sgpio_init(vtss_state));
     }
     return VTSS_RC_OK;
 }

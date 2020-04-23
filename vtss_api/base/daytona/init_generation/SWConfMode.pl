@@ -1,28 +1,28 @@
+# Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 #
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
 #
-# Copyright (c) 2002-2016 Microsemi Corporation "Microsemi". All Rights Reserved.
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
 
-# Unpublished rights reserved under the copyright laws of the United States of
-# America, other countries and international treaties. Permission to use, copy,
-# store and modify, the software and its source code is granted but only in
-# connection with products utilizing the Microsemi switch and PHY products.
-# Permission is also granted for you to integrate into other products, disclose,
-# transmit and distribute the software only in an absolute machine readable format
-# (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
-# PHY products.  The source code of the software may not be disclosed, transmitted
-# or distributed without the prior written permission of Microsemi.
-#
-# This copyright notice must appear in any copy, modification, disclosure,
-# transmission or distribution of the software.  Microsemi retains all ownership,
-# copyright, trade secret and proprietary rights in the software and its source code,
-# including all modifications thereto.
-#
-# THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
-# OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
-# IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
-# MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
-#
 # Test File to read in config info
+
+use Time::localtime;
+my $year=localtime->year + 1900;
 
 # pass in working directory and block name from excel
 my $workdir = @ARGV[0];
@@ -33,50 +33,38 @@ my $importfile = $workdir . "block_states" . ".txt";
 my $cfilename = $outdir . "vtss_daytona_reg_init_" . "block_states" . ".inc";
 my $hfilename = $outdir . "vtss_daytona_reg_init_" . "block_states" . ".h";
 
+my $copyright = <<"EOT"
+/*
+ Copyright (c) 2004-$year Microsemi Corporation "Microsemi".
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
+*/
+EOT
+;
+
 # open output files to blow away old data
 open (CFH, ">", $cfilename) or die "Cannot open $cfilename for writing";
-print CFH " Copyright (c) 2002-2014 Vitesse Semiconductor Corporation \"Vitesse\". All\n";
-print CFH " Rights Reserved.\n\n";
-print CFH " Unpublished rights reserved under the copyright laws of the United States of\n";
-print CFH " America, other countries and international treaties. Permission to use, copy,\n";
-print CFH " store and modify, the software and its source code is granted. Permission to\n";
-print CFH " integrate into other products, disclose, transmit and distribute the software\n";
-print CFH " in an absolute machine readable format (e.g. HEX file) is also granted.  The\n";
-print CFH " source code of the software may not be disclosed, transmitted or distributed\n";
-print CFH " without the written permission of Vitesse. The software and its source code\n";
-print CFH " may only be used in products utilizing the Vitesse switch products.\n\n";
-print CFH " This copyright notice must appear in any copy, modification, disclosure,\n";
-print CFH " transmission or distribution of the software. Vitesse retains all ownership,\n";
-print CFH " copyright, trade secret and proprietary rights in the software.\n\n";
- 
-print CFH " THIS SOFTWARE HAS BEEN PROVIDED \"AS IS,\" WITHOUT EXPRESS OR IMPLIED WARRANTY\n";
-print CFH " INCLUDING, WITHOUT LIMITATION, IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS\n";
-print CFH " FOR A PARTICULAR USE AND NON-INFRINGEMENT.\n\n";
-
-print CFH "*/\n";
-
+print CFH "$copyright\n";
 close CFH;
 
 open (HFH, ">", $hfilename) or die "Cannot open $cfilename for writing";
-# print out include protection
-print HFH " Copyright (c) 2002-2014 Vitesse Semiconductor Corporation \"Vitesse\". All\n";
-print HFH " Rights Reserved.\n\n";
-print HFH " Unpublished rights reserved under the copyright laws of the United States of\n";
-print HFH " America, other countries and international treaties. Permission to use, copy,\n";
-print HFH " store and modify, the software and its source code is granted. Permission to\n";
-print HFH " integrate into other products, disclose, transmit and distribute the software\n";
-print HFH " in an absolute machine readable format (e.g. HEX file) is also granted.  The\n";
-print HFH " source code of the software may not be disclosed, transmitted or distributed\n";
-print HFH " without the written permission of Vitesse. The software and its source code\n";
-print HFH " may only be used in products utilizing the Vitesse switch products.\n\n";
-print HFH " This copyright notice must appear in any copy, modification, disclosure,\n";
-print HFH " transmission or distribution of the software. Vitesse retains all ownership,\n";
-print HFH " copyright, trade secret and proprietary rights in the software.\n\n";
-print HFH " THIS SOFTWARE HAS BEEN PROVIDED \"AS IS,\" WITHOUT EXPRESS OR IMPLIED WARRANTY\n";
-print HFH " INCLUDING, WITHOUT LIMITATION, IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS\n";
-print HFH " FOR A PARTICULAR USE AND NON-INFRINGEMENT.\n\n";
-print HFH "*/\n";
-
+print HFH "$copyright\n";
 print HFH "#ifndef _VTSS_DAYTONA_REG_INIT_BLOCK_STATES_H" . "\n";
 print HFH "#define _VTSS_DAYTONA_REG_INIT_BLOCK_STATES_H" . "\n\n";
 close HFH;
@@ -94,7 +82,7 @@ my $line = 0;
 #my $block = "";
 (-e $importfile) or die "File $importfile does not exist!";
 
-# open file to read from 
+# open file to read from
 open (FH, "<", $importfile);
 
 print "\nCreating config mode table \n";
@@ -117,7 +105,7 @@ while (<FH>) {
 		for (my $j=0; $j<$nondatacols; $j++) { shift @data; };
 		# add block names to list
 		#debprint "(header test) in case 1 (line" . $line . "), data is " . @data . "\n";
-		foreach $block (@data) { 
+		foreach $block (@data) {
             if ($block eq "cxfi") {$block = "xfi_1"}
             if ($block eq "lxfi") {$block = "xfi_2"}
             if ($block eq "cxfi_hss11g") {$block = "xfi_hss11g_1"}
@@ -168,7 +156,7 @@ while (<FH>) {
                 $i++;
 			}
             print CFH "},\n";
-		}	
+		}
 	}
 	print ".";
 	$line++;
@@ -178,7 +166,7 @@ print HFH "    MODE_LAST\n} mode_name_t;\n\n";
 print HFH "#endif /* _VTSS_DAYTONA_REG_INIT_BLOCK_STATES_H */" . "\n";
 
 #$i = 0;
-#foreach $block_mode (@block_modes) { 
+#foreach $block_mode (@block_modes) {
 #    if ($block_mode ne "")   {print HFH $block_mode . "    BM_" . uc($blocks[$i]) . "_LAST\n} block_" . $blocks[$i] . "_mode_t;\n\n";}
 #    $i++;
 #}
@@ -190,7 +178,7 @@ close FH;
 
 print "\nComplete!\n";
 
-	
+
 # calls print only if the global variable debugp is set
 sub debprint {
   my $string = shift;
@@ -198,7 +186,7 @@ sub debprint {
 }
 
 # makes stdout "hot", or unbuffered, so we can show progress
-sub stdouthot { 
+sub stdouthot {
 	my $ofh = select STDOUT;
 	  $| = 1;
 	  select $ofh;

@@ -1,27 +1,25 @@
 /*
 
 
- Copyright (c) 2002-2017 Microsemi Corporation "Microsemi". All Rights Reserved.
+ Copyright (c) 2004-2018 Microsemi Corporation "Microsemi".
 
- Unpublished rights reserved under the copyright laws of the United States of
- America, other countries and international treaties. Permission to use, copy,
- store and modify, the software and its source code is granted but only in
- connection with products utilizing the Microsemi switch and PHY products.
- Permission is also granted for you to integrate into other products, disclose,
- transmit and distribute the software only in an absolute machine readable format
- (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
- PHY products.  The source code of the software may not be disclosed, transmitted
- or distributed without the prior written permission of Microsemi.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
- This copyright notice must appear in any copy, modification, disclosure,
- transmission or distribution of the software.  Microsemi retains all ownership,
- copyright, trade secret and proprietary rights in the software and its source code,
- including all modifications thereto.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
- OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
- IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
 
 */
@@ -267,8 +265,8 @@
  */
 #define VTSS_HOST_PLL5G_H_PLL5G_H_PLL5G_STATUS1A  VTSS_IOREG(0x1e, 0, 0x810e)
 #define VTSS_HOST_PLL5G_H_PLL5G_H_PLL5G_STATUS1B  VTSS_IOREG(0x1e, 0, 0x810f)
-#define VTSS_LINE_PLL5G_H_PLL5G_H_PLL5G_STATUS1A  VTSS_IOREG(0x1e, 0, 0x8211)
-#define VTSS_LINE_PLL5G_H_PLL5G_H_PLL5G_STATUS1B  VTSS_IOREG(0x1e, 0, 0x8212)
+#define VTSS_LINE_PLL5G_L_PLL5G_L_PLL5G_STATUS1A  VTSS_IOREG(0x1e, 0, 0x8211)
+#define VTSS_LINE_PLL5G_L_PLL5G_L_PLL5G_STATUS1B  VTSS_IOREG(0x1e, 0, 0x8212)
 
 /** 
  * \brief
@@ -369,6 +367,9 @@ static vtss_rc phy_10g_f2df_conf_set(struct vtss_state_s *vtss_state,
 static vtss_rc venice_1588_fifo_reset(vtss_state_t *vtss_state,
                                       const vtss_port_no_t port_no,
                                       const vtss_phy_10g_fifo_sync_t *conf);
+static vtss_rc venice_c_1588_fifo_reset(vtss_state_t *vtss_state,
+                                        const vtss_port_no_t port_no,
+                                        const vtss_phy_10g_fifo_sync_t *conf);
 #endif
  vtss_rc phy_10g_venice_block_level_resets(struct vtss_state_s *vtss_state,
                                                  vtss_port_no_t port_no);
@@ -439,6 +440,7 @@ static vtss_rc venice_phy_10g_base_kr_training_set (struct vtss_state_s *vtss_st
 
 #define VENICE_REV_C_PORT_SERDES_SETUP_STATUS  VTSS_VENICE_DEV1_SPARE_RW_REGISTERS_DEV1_SPARE_RW1
 #define VENICE_REV_C_PORT_SERDES_SETUP_STATUS_BIT  VTSS_BIT(7)
+#define VENICE_REV_C_PORT_F2DF_SETUP_STATUS_BIT   VTSS_BIT(6)
 /* ================================================================= *
  *  Static Functions
  * ================================================================= */
@@ -492,6 +494,9 @@ typedef struct {
     u8 ib_main_thres;
     u8 l_range_sel;
     u8 l_max;
+    u8 eqz_offs_range_sel;
+    u8 eqz_agc_range_sel;
+    u8 eqz_c_range_sel;
 } vtss_phy_10g_serdes_data_t;
 static void venice_serdes_data_get_rev_a(vtss_phy_10g_serdes_data_t *data)
 {
@@ -516,6 +521,9 @@ static void venice_serdes_data_get_rev_a(vtss_phy_10g_serdes_data_t *data)
     data->ib_main_thres = 32;
     data->l_range_sel = 22;
     data->l_max = 62;
+    data->eqz_offs_range_sel = 20;
+    data->eqz_agc_range_sel = 20;
+    data->eqz_c_range_sel = 23;
 }
 
 /* venice rev A serdes */
@@ -579,13 +587,11 @@ static vtss_rc venice_line_sd10g_tx_cfg_lan10g(vtss_state_t *vtss_state, vtss_po
             VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG0_SYNTH_SPEED_SEL |
             VTSS_M_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG0_SYNTH_FBDIV_SEL);
 
-    CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3,
-            VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3_SYNTH_FREQM_0(0),
-            VTSS_M_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3_SYNTH_FREQM_0);
+    CSR_WARM_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3,
+            VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3_SYNTH_FREQM_0(0));
 
-    CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4,
-            VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4_SYNTH_FREQN_0(0),
-            VTSS_M_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4_SYNTH_FREQN_0);
+    CSR_WARM_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4,
+            VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4_SYNTH_FREQN_0(0));
 
     CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1,
             VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1_SYNTH_FREQ_MULT_BYP |
@@ -899,13 +905,11 @@ static vtss_rc venice_line_sd10g_rx_cfg_lan10g(vtss_state_t *vtss_state, vtss_po
             VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG0_SYNTH_SPEED_SEL |
             VTSS_M_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG0_SYNTH_FBDIV_SEL);
 
-    CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3,
-            VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3_SYNTH_FREQM_0(0),
-            VTSS_M_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3_SYNTH_FREQM_0);
+    CSR_COLD_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3,
+            VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3_SYNTH_FREQM_0(0));
 
-    CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4,
-            VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4_SYNTH_FREQN_0(0),
-            VTSS_M_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4_SYNTH_FREQN_0);
+    CSR_COLD_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4,
+            VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4_SYNTH_FREQN_0(0));
 
     CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG1,
             VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG1_SYNTH_FREQ_MULT_BYP |
@@ -1307,7 +1311,7 @@ static vtss_rc venice_line_sd10g_apc_cfg_lan10g(vtss_state_t *vtss_state, vtss_p
 
     CSR_WARM_WRM(port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_OFFS_PAR_CFG),
             VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_OFFS_PAR_CFG_EQZ_OFFS_CHG_MODE(0) |
-            VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_OFFS_PAR_CFG_EQZ_OFFS_RANGE_SEL(20) |
+            VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_OFFS_PAR_CFG_EQZ_OFFS_RANGE_SEL(data.eqz_offs_range_sel) |
             VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_OFFS_PAR_CFG_EQZ_OFFS_MAX(255),
             VTSS_M_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_OFFS_PAR_CFG_EQZ_OFFS_CHG_MODE |
             VTSS_M_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_OFFS_PAR_CFG_EQZ_OFFS_RANGE_SEL |
@@ -1328,7 +1332,7 @@ static vtss_rc venice_line_sd10g_apc_cfg_lan10g(vtss_state_t *vtss_state, vtss_p
 
     CSR_WARM_WRM(port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_AGC_PAR_CFG),
             VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_AGC_PAR_CFG_EQZ_AGC_CHG_MODE(0) |
-            VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_AGC_PAR_CFG_EQZ_AGC_RANGE_SEL(20) |
+            VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_AGC_PAR_CFG_EQZ_AGC_RANGE_SEL(data.eqz_agc_range_sel) |
             VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_AGC_PAR_CFG_EQZ_AGC_MAX(data.eqz_agc_max) |
             VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_AGC_PAR_CFG_EQZ_AGC_MIN(0),
             VTSS_M_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_AGC_PAR_CFG_EQZ_AGC_CHG_MODE |
@@ -1375,7 +1379,7 @@ static vtss_rc venice_line_sd10g_apc_cfg_lan10g(vtss_state_t *vtss_state, vtss_p
 
     CSR_WARM_WRM(port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_C_PAR_CFG),
             VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_C_PAR_CFG_EQZ_C_CHG_MODE(0) |
-            VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_C_PAR_CFG_EQZ_C_RANGE_SEL(23) |
+            VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_C_PAR_CFG_EQZ_C_RANGE_SEL(data.eqz_c_range_sel) |
             VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_C_PAR_CFG_EQZ_C_MAX(31) |
             VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_C_PAR_CFG_EQZ_C_MIN(data.eqz_c_min),
             VTSS_M_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_C_PAR_CFG_EQZ_C_CHG_MODE |
@@ -1537,13 +1541,11 @@ static vtss_rc venice_line_sd10g_tx_cfg_wan10g(vtss_state_t *vtss_state, vtss_po
             VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG0_SYNTH_SPEED_SEL |
             VTSS_M_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG0_SYNTH_FBDIV_SEL);
 
-    CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3,
-            VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3_SYNTH_FREQM_0(398458880),
-            VTSS_M_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3_SYNTH_FREQM_0);
+    CSR_WARM_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3,
+            VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3_SYNTH_FREQM_0(398458880));
 
-    CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4,
-            VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4_SYNTH_FREQN_0(1111490560),
-            VTSS_M_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4_SYNTH_FREQN_0);
+    CSR_WARM_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4,
+            VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4_SYNTH_FREQN_0(1111490560));
 
     CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1,
             VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1_SYNTH_FREQ_MULT_BYP |
@@ -1858,13 +1860,11 @@ static vtss_rc venice_line_sd10g_rx_cfg_wan10g(vtss_state_t *vtss_state, vtss_po
             VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG0_SYNTH_SPEED_SEL |
             VTSS_M_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG0_SYNTH_FBDIV_SEL);
 
-    CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3,
-            VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3_SYNTH_FREQM_0(398458880),
-            VTSS_M_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3_SYNTH_FREQM_0);
+    CSR_WARM_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3,
+            VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3_SYNTH_FREQM_0(398458880));
 
-    CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4,
-            VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4_SYNTH_FREQN_0(1111490560),
-            VTSS_M_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4_SYNTH_FREQN_0);
+    CSR_WARM_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4,
+            VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4_SYNTH_FREQN_0(1111490560));
 
     CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG1,
             VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG1_SYNTH_FREQ_MULT_BYP |
@@ -2488,13 +2488,11 @@ static vtss_rc venice_line_sd10g_tx_cfg_lan1g(vtss_state_t *vtss_state, vtss_por
             VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG0_SYNTH_SPEED_SEL |
             VTSS_M_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG0_SYNTH_FBDIV_SEL);
 
-    CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3,
-            VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3_SYNTH_FREQM_0(0),
-            VTSS_M_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3_SYNTH_FREQM_0);
+    CSR_WARM_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3,
+            VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3_SYNTH_FREQM_0(0));
 
-    CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4,
-            VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4_SYNTH_FREQN_0(0),
-            VTSS_M_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4_SYNTH_FREQN_0);
+    CSR_WARM_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4,
+            VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4_SYNTH_FREQN_0(0));
 
     CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1,
             VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1_SYNTH_FREQ_MULT_BYP |
@@ -2808,13 +2806,11 @@ static vtss_rc venice_line_sd10g_rx_cfg_lan1g(vtss_state_t *vtss_state, vtss_por
             VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG0_SYNTH_SPEED_SEL |
             VTSS_M_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG0_SYNTH_FBDIV_SEL);
 
-    CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3,
-            VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3_SYNTH_FREQM_0(0),
-            VTSS_M_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3_SYNTH_FREQM_0);
+    CSR_WARM_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3,
+            VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3_SYNTH_FREQM_0(0));
 
-    CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4,
-            VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4_SYNTH_FREQN_0(0),
-            VTSS_M_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4_SYNTH_FREQN_0);
+    CSR_WARM_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4,
+            VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4_SYNTH_FREQN_0(0));
 
     CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG1,
             VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG1_SYNTH_FREQ_MULT_BYP |
@@ -3655,13 +3651,11 @@ static vtss_rc venice_line_sd10g_rx_ib_cal_cfg(vtss_state_t *vtss_state, vtss_po
             VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG0_SYNTH_FBDIV_SEL(0),
             VTSS_M_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG0_SYNTH_FBDIV_SEL);
 
-    CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3,
-            VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3_SYNTH_FREQM_0(0xA0000000),
-            VTSS_M_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3_SYNTH_FREQM_0);
+    CSR_COLD_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3,
+            VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG3_SYNTH_FREQM_0(0xA0000000));
 
-    CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4,
-            VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4_SYNTH_FREQN_0(0xA0000000),
-            VTSS_M_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4_SYNTH_FREQN_0);
+    CSR_COLD_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4,
+            VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG4_SYNTH_FREQN_0(0xA0000000));
 
     CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG1,
             VTSS_F_VENICE_DEV1_32_SD10G65_RX_SYNTH_SD10G65_RX_SYNTH_CFG1_SYNTH_FREQ_MULT_BYP,
@@ -5504,24 +5498,19 @@ static vtss_rc phy_10g_mode_conf_set(vtss_state_t *vtss_state,
     vtss_serdes_mode_t serdes_mode = VTSS_SERDES_MODE_XAUI;
     vtss_phy_10g_mode_t *mode = &vtss_state->phy_10g_state[port_no].mode;
     vtss_phy_10g_media_t media_type;
-    BOOL rev_check = FALSE;
-    u32 value;
+    u32 value, i, lcpll_gain, lcpll_status, apc_status;
     BOOL macsec_enable = FALSE;
+    vtss_port_no_t base_port_no = vtss_state->phy_10g_state[port_no].phy_api_base_no;
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+    vtss_phy_10g_fifo_sync_t  venice_fifo_conf;
+    BOOL                      skip_ts_reset;
+#endif
 
 #if defined(VTSS_FEATURE_MACSEC)
     macsec_enable = vtss_state->macsec_conf[port_no].glb.init.enable;
 #endif
     /* for VSC8491 10G Serdes and F2DF reciever settings only to be called for PMA_PORT*/
     vtss_port_no_t          pma_port = pma_port_no(vtss_state, port_no);
-    if(!venice_rev_a(vtss_state, port_no)){
-        rev_check = TRUE;
-    } else {
-        rev_check = TRUE;
-    }
-    if(!rev_check){
-        VTSS_E("VTSS_ARCH_VENICE_C macro must be defined for Rev C of VSC8490 family");
-        return VTSS_RC_ERROR;
-    }
 
     VTSS_I("phy_10g_mode_conf_set - Reset:%u\n",port_no);
 
@@ -5611,7 +5600,7 @@ static vtss_rc phy_10g_mode_conf_set(vtss_state_t *vtss_state,
     CSR_RD(base_port(vtss_state, port_no), VTSS_VENICE_GLOBAL_POR_STATUS_POR_DONE, &value);
     value = value & VTSS_F_VENICE_GLOBAL_POR_STATUS_POR_DONE_POR_DONE;
 
-    if ((port_no == vtss_state->phy_10g_state[port_no].phy_api_base_no) && (mode->is_init == TRUE)) {
+    if (mode->is_init == TRUE) {
         if(value == 0) {
             /********************************************************/
             /* PLL5G setup                                          */
@@ -5626,7 +5615,8 @@ static vtss_rc phy_10g_mode_conf_set(vtss_state_t *vtss_state,
                     0,
                     VTSS_F_LINE_PLL5G_L_PLL5G_L_PLL5G_CFG0A_ENA_VCO_CONTRH);
 
-            // Increase Bandgap voltage (selbgv820=2)
+            // Increase Bandgap voltage (selbgv820=2) for Rev.A and B. 
+            // Note: selbgv820 for Rev.C and D are set by register CFG8A_SELBGV820_REVC to value 4.
             CSR_COLD_WRM(base_port(vtss_state, port_no), VTSS_LINE_PLL5G_L_PLL5G_L_PLL5G_CFG0B,
                     VTSS_F_LINE_PLL5G_L_PLL5G_L_PLL5G_CFG0B_SELBGV820(2),
                     VTSS_M_LINE_PLL5G_L_PLL5G_L_PLL5G_CFG0B_SELBGV820);
@@ -5642,27 +5632,71 @@ static vtss_rc phy_10g_mode_conf_set(vtss_state_t *vtss_state,
 
             // Wait for 1 ms until XREFCLK has settled (added after further discussion)
             VTSS_MSLEEP(1);
+            /*Toggle FSM Line Side */
 
-            // Stop PLL5G in order to initiate a recalibration (disable_fsm=1)
-            CSR_COLD_WRM(base_port(vtss_state, port_no), VTSS_HOST_PLL5G_H_PLL5G_H_PLL5G_CFG2A,
-                    VTSS_F_HOST_PLL5G_H_PLL5G_H_PLL5G_CFG2A_DISABLE_FSM,
-                    VTSS_F_HOST_PLL5G_H_PLL5G_H_PLL5G_CFG2A_DISABLE_FSM);
+            for(i=0;i<10;i++)
+            {
 
-            CSR_COLD_WRM(base_port(vtss_state, port_no), VTSS_LINE_PLL5G_L_PLL5G_L_PLL5G_CFG2A,
-                    VTSS_F_LINE_PLL5G_L_PLL5G_L_PLL5G_CFG2A_DISABLE_FSM,
-                    VTSS_F_LINE_PLL5G_L_PLL5G_L_PLL5G_CFG2A_DISABLE_FSM);
+                VTSS_N("Work around to check the LCPLL Gain on Line side for Venice, iteration :%d\n", i);
+                // Stop PLL5G in order to initiate a recalibration (disable_fsm=1)
+                CSR_COLD_WRM(base_port(vtss_state, port_no), VTSS_LINE_PLL5G_L_PLL5G_L_PLL5G_CFG2A,
+                        VTSS_F_LINE_PLL5G_L_PLL5G_L_PLL5G_CFG2A_DISABLE_FSM,
+                        VTSS_F_LINE_PLL5G_L_PLL5G_L_PLL5G_CFG2A_DISABLE_FSM);
 
-            // Restart and recalibrate PLL5G (disable_fsm=0)
-            CSR_COLD_WRM(base_port(vtss_state, port_no), VTSS_HOST_PLL5G_H_PLL5G_H_PLL5G_CFG2A,
-                    0,
-                    VTSS_F_HOST_PLL5G_H_PLL5G_H_PLL5G_CFG2A_DISABLE_FSM);
+                // Restart and recalibrate PLL5G (disable_fsm=0)
+                CSR_COLD_WRM(base_port(vtss_state, port_no), VTSS_LINE_PLL5G_L_PLL5G_L_PLL5G_CFG2A,
+                        0,
+                        VTSS_F_LINE_PLL5G_L_PLL5G_L_PLL5G_CFG2A_DISABLE_FSM);
 
-            CSR_COLD_WRM(base_port(vtss_state, port_no), VTSS_LINE_PLL5G_L_PLL5G_L_PLL5G_CFG2A,
-                    0,
-                    VTSS_F_LINE_PLL5G_L_PLL5G_L_PLL5G_CFG2A_DISABLE_FSM);
+                // Wait for 10 ms until PLL has come up
+                VTSS_MSLEEP(10);
+                CSR_RD(port_no, VTSS_LINE_PLL5G_L_PLL5G_L_PLL5G_STATUS1B,&value);
+                lcpll_gain = VTSS_EXTRACT_BITFIELD(value,0,4);
 
-            // Wait for 10 ms until PLL has come up
-            VTSS_MSLEEP(10);
+                if(lcpll_gain > 2 && lcpll_gain < 0xa)
+                {
+                    break;
+                }
+                VTSS_N("Restarting the FSM Toggle on Line side for Port: %d, Iteration:%d and current gain value:%d\n", port_no, i+1, lcpll_gain);
+             }
+
+             if(lcpll_gain < 2 || lcpll_gain > 0xa) {
+                 VTSS_E("Failed to initialize Line LCPLL as the gain was too high or low, current gain value for port %d, is : %d",port_no,lcpll_gain);
+             }
+
+
+        /*Toggle FSM  Host Side */
+
+            for(i=0;i<10;i++)
+            {
+
+                VTSS_N("Work around to check the LCPLL Gain on Host side for Venice, iteration :%d\n", i);
+                // Stop PLL5G in order to initiate a recalibration (disable_fsm=1)
+                CSR_COLD_WRM(base_port(vtss_state, port_no), VTSS_HOST_PLL5G_H_PLL5G_H_PLL5G_CFG2A,
+                        VTSS_F_HOST_PLL5G_H_PLL5G_H_PLL5G_CFG2A_DISABLE_FSM,
+                        VTSS_F_HOST_PLL5G_H_PLL5G_H_PLL5G_CFG2A_DISABLE_FSM);
+
+                // Restart and recalibrate PLL5G (disable_fsm=0)
+                CSR_COLD_WRM(base_port(vtss_state, port_no), VTSS_HOST_PLL5G_H_PLL5G_H_PLL5G_CFG2A,
+                        0,
+                        VTSS_F_HOST_PLL5G_H_PLL5G_H_PLL5G_CFG2A_DISABLE_FSM);
+
+                // Wait for 10 ms until PLL has come up
+                VTSS_MSLEEP(10);
+
+                CSR_RD(port_no, VTSS_HOST_PLL5G_H_PLL5G_H_PLL5G_STATUS1B,&value);
+                lcpll_gain = VTSS_EXTRACT_BITFIELD(value,0,4);
+
+                if(lcpll_gain > 2 && lcpll_gain < 0xa)
+                {
+                    break;
+                }
+                VTSS_N("Restarting the FSM Toggle on host side for Port: %d, Iteration:%d and current gain value:%d\n", port_no, i+1, lcpll_gain);
+             }
+
+             if(lcpll_gain < 2 || lcpll_gain > 0xa) {
+                VTSS_E("Failed to initialize Host LCPLL as the gain was too high or low, current gain value for port %d, is : %d",port_no,lcpll_gain);
+             } 
 
             // trigger POR_DONE logic (por_done=1)
             CSR_COLD_WRM(base_port(vtss_state, port_no), VTSS_VENICE_GLOBAL_POR_STATUS_POR_DONE,
@@ -5695,6 +5729,19 @@ static vtss_rc phy_10g_mode_conf_set(vtss_state_t *vtss_state,
         }
         mode->is_init = FALSE;
     }
+         CSR_RD(base_port_no,VTSS_HOST_PLL5G_H_PLL5G_H_PLL5G_STATUS0,&lcpll_status);
+         VTSS_I("Host PLL Status 0 is 0x%x for port %u \n", lcpll_status, port_no);
+         CSR_RD(base_port_no,VTSS_HOST_PLL5G_H_PLL5G_H_PLL5G_STATUS1A,&lcpll_status);
+         VTSS_I("Host PLL Status 1A is 0x%x for port %u \n", lcpll_status, port_no);
+         CSR_RD(base_port_no,VTSS_HOST_PLL5G_H_PLL5G_H_PLL5G_STATUS1B,&lcpll_status);
+         VTSS_I("Host PLL Status 1B is 0x%x for port %u \n", lcpll_status, port_no);
+         CSR_RD(base_port_no,VTSS_LINE_PLL5G_L_PLL5G_L_PLL5G_STATUS0,&lcpll_status);
+         VTSS_I("Line PLL Status 0 is 0x%x for port %u \n", lcpll_status, port_no);
+         CSR_RD(base_port_no,VTSS_LINE_PLL5G_L_PLL5G_L_PLL5G_STATUS1A,&lcpll_status);
+         VTSS_I("Line PLL Status 1A is 0x%x for port %u \n", lcpll_status, port_no);
+         CSR_RD(base_port_no,VTSS_LINE_PLL5G_L_PLL5G_L_PLL5G_STATUS1B,&lcpll_status);
+         VTSS_I("Line PLL Status 1B is 0x%x for port %u \n", lcpll_status, port_no);
+
     //clearing the serdes status bit so that serdes settings can be applied again(Only in case of Non-WarmStart instance of this function).
     CSR_COLD_WRM(port_no,VENICE_REV_C_PORT_SERDES_SETUP_STATUS,
             0,
@@ -5839,6 +5886,9 @@ static vtss_rc phy_10g_mode_conf_set(vtss_state_t *vtss_state,
     VTSS_RC(venice_line_serdes(vtss_state, pma_port));
 
     /*6G serdes applied here */
+    CSR_RD(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0, &apc_status);
+    VTSS_I("Line APC Common CFG0 is 0x%x for port %u \n", apc_status, port_no);
+
     if(venice_rev_a(vtss_state, port_no)){
         /*venice REV A 6g serdes settings */
         VTSS_RC(venice_sd6g_cfg(vtss_state, port_no, serdes_mode));
@@ -5930,7 +5980,16 @@ static vtss_rc phy_10g_mode_conf_set(vtss_state_t *vtss_state,
     if (macsec_enable || (mode->oper_mode == VTSS_PHY_1G_MODE)) {
         VTSS_RC(phy_10g_mac_conf(vtss_state, port_no, 1, macsec_enable));
     }
-
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+    /* After mode configurations are complete we need to call the OOS routine for Venice-C */
+    VTSS_RC(vtss_phy_ts_version_check(vtss_state, port_no, &skip_ts_reset));
+    if((!venice_rev_a(vtss_state, port_no)) && (!skip_ts_reset) && (!vtss_state->sync_calling_private)){
+        /* Bypass set and remove is handled in the vtss_phy_10g_mode_set
+        API so no need to clear bypass here. */
+        venice_fifo_conf.bypass_in_api = FALSE;
+        VTSS_RC(venice_c_1588_fifo_reset(vtss_state, port_no, &venice_fifo_conf));
+    }
+#endif
     return VTSS_RC_OK;
 }
 
@@ -5946,8 +6005,18 @@ static vtss_rc phy_10g_mode_conf_set(vtss_state_t *vtss_state,
             VTSS_F_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET1_HOST_1G_PCS_INGR_RESET |
             VTSS_F_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET1_LINE_10G_PCS_INGR_RESET |
             VTSS_F_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET1_LINE_1G_PCS_INGR_RESET |
-            VTSS_F_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET1_WIS_INGR_RESET |
+            VTSS_F_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET1_WIS_INGR_RESET);
+
+#if defined(VTSS_FEATURE_MACSEC)
+    if (!vtss_state->macsec_conf[port_no].glb.init.enable) {
+        CSR_COLD_WR(port_no, VTSS_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET1,
+                VTSS_F_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET1_HOST_MAC_INGR_RESET);
+    }
+#else
+    CSR_COLD_WR(port_no, VTSS_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET1,
             VTSS_F_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET1_HOST_MAC_INGR_RESET);
+#endif
+
     VTSS_MSLEEP(10);
 
     CSR_COLD_WR(port_no, VTSS_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET1,
@@ -5959,8 +6028,19 @@ static vtss_rc phy_10g_mode_conf_set(vtss_state_t *vtss_state,
             VTSS_F_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET2_HOST_1G_PCS_EGR_RESET |
             VTSS_F_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET2_LINE_10G_PCS_EGR_RESET |
             VTSS_F_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET2_LINE_1G_PCS_EGR_RESET |
-            VTSS_F_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET2_WIS_EGR_RESET |
+            VTSS_F_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET2_WIS_EGR_RESET);
+
+#if defined(VTSS_FEATURE_MACSEC)
+    if (!vtss_state->macsec_conf[port_no].glb.init.enable) {
+
+        CSR_COLD_WR(port_no, VTSS_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET2,
+                VTSS_F_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET2_HOST_MAC_EGR_RESET);
+    }
+#else
+    CSR_COLD_WR(port_no, VTSS_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET2,
             VTSS_F_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET2_HOST_MAC_EGR_RESET);
+#endif
+
     VTSS_MSLEEP(10);
 
     CSR_COLD_WR(port_no, VTSS_VENICE_DEV1_BLOCK_LEVEL_RESET_BLOCK_LEVEL_RESET2,
@@ -6312,154 +6392,195 @@ vtss_rc venice_phy_10g_debug_reg_dump(vtss_state_t *vtss_state,
                 VTSS_BIT(0),
                 VTSS_BIT(0));
 
-                } else {
-                sprintf(buf, "PORT %d", port_no);
-                venice_debug_reg_header(pr);
+    } else {
+        sprintf(buf, "PORT %d", port_no);
+        venice_debug_reg_header(pr);
 
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_Eth_10GBASE_R_PCS_Status_2_Eth_10GBASE_R_PCS_Status_2, "10GBASE_R_PCS_Status_2", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_Eth_10GBASE_R_PCS_Status_2_Eth_10GBASE_R_PCS_Status_2, "10GBASE_R_PCS_Status_2", &value);
+        // Gloabal registers
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_GLOBAL_Device_Info_Device_ID, "Device_ID", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_GLOBAL_Device_Info_Device_Revision, "Device_Revision", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_GLOBAL_Pin_Status_Pin_Status, "Pin_Status_Pin_Status", &value);
 
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Status_2_PCS_Status_2, "PCS_STATUS_2", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Status_2_PCS_Status_2, "PCS_STATUS_2", &value);
+        // 10G PCS
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_Eth_10GBASE_R_PCS_Status_2_Eth_10GBASE_R_PCS_Status_2, "10GBASE_R_PCS_Status_2", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_Eth_10GBASE_R_PCS_Status_2_Eth_10GBASE_R_PCS_Status_2, "10GBASE_R_PCS_Status_2", &value);
 
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Status_1_PCS_Status_1, "PCS_STATUS_1", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Status_1_PCS_Status_1, "PCS_STATUS_1", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_Eth_10GBASE_R_PCS_Status_1_Eth_10GBASE_R_PCS_Status_1, "10GBASE_R_PCS_Status_1", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_Eth_10GBASE_R_PCS_Status_1_Eth_10GBASE_R_PCS_Status_1, "10GBASE_R_PCS_Status_1", &value);
 
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_PHY_XS_Status_2_PHY_XS_Status_2, "PHY_XS_Status_2", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_PHY_XS_Status_2_PHY_XS_Status_2, "PHY_XS_Status_2", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_PHY_XS_Status_2_PHY_XS_Status_2, "PHY_XS_Status_2", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Status_2_PCS_Status_2, "PCS_STATUS_2", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Status_2_PCS_Status_2, "PCS_STATUS_2", &value);
 
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_STATUS, "PCS_XAUI_STATUS", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_STATUS2, "PCS_XAUI_STATUS2", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Status_1_PCS_Status_1, "PCS_STATUS_1", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Status_1_PCS_Status_1, "PCS_STATUS_1", &value);
 
-                CSR_RD(port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_INT, &value);
-                CSR_WARM_WR(port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_INT, value & 0xffff);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_INT, "PCS_XAUI_INT", &value);
-                CSR_RD(port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_INT2, &value);
-                CSR_WARM_WR(port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_INT2, value & 0x3ff);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_INT2, "PCS_XAUI_INT2", &value);
-                
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_HOST_PLL5G_H_PLL5G_H_PLL5G_STATUS1A, "HOST LCPLL status1A", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_HOST_PLL5G_H_PLL5G_H_PLL5G_STATUS1B, "HOST LCPLL status1B", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_LINE_PLL5G_H_PLL5G_H_PLL5G_STATUS1A, "LINE LCPLL status1A", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_LINE_PLL5G_H_PLL5G_H_PLL5G_STATUS1B, "LINE LCPLL status1B", &value);
+        // PHYXS
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_PHY_XS_Status_2_PHY_XS_Status_2, "PHY_XS_Status_2", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_PHY_XS_Status_2_PHY_XS_Status_2, "PHY_XS_Status_2", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_PHY_XS_Status_2_PHY_XS_Status_2, "PHY_XS_Status_2", &value);
 
-                //APC REGISTERS
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_L_CTRL), "APC_EQZ_L_CTRL", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_L_PAR_CFG), "APC_EQZ_L_PAR_CFG", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_C_CTRL), "APC_EQZ_C_CTRL", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_C_PAR_CFG), "APC_EQZ_C_PAR_CFG", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_AGC_CTRL), "APC_EQZ_AGC_CTRL", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_AGC_PAR_CFG), "APC_EQZ_AGC_PAR_CFG", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_OFFS_CTRL), "APC_EQZ_OFFS_CTRL", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_OFFS_PAR_CFG), "APC_EQZ_OFFS_PAR_CFG", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_LD_CTRL), "APC_EQZ_LD_CTRL", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_CTRL_STATUS), "APC_EQZ_CTRL_STATUS", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_GAIN_CTRL_CFG), "APC_EQZ_GAIN_CTRL_CFG", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_DFE1_CTRL), "APC_DFE1_CTRL", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_DFE1_PAR_CFG), "APC_DFE1_PAR_CFG", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_DFE2_CTRL), "APC_DFE2_CTRL", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_DFE2_PAR_CFG), "APC_DFE2_PAR_CFG", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_DFE3_CTRL), "APC_DFE3_CTRL", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_DFE3_PAR_CFG), "APC_DFE3_PAR_CFG", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_DFE4_CTRL), "APC_DFE4_CTRL", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_DFE4_PAR_CFG), "APC_DFE4_PAR_CFG", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0), "APC_COMMON_CFG0", &value);
+        // PCS XAUI
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_CONFIGURATION_PCS_XAUI_INTERLEAVE_MODE_CFG, "PCS_XAUI_INTERLEAVE_MODE_CFG", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_CONFIGURATION_PCS_XAUI_INTERLEAVE_MODE_CFG2, "PCS_XAUI_INTERLEAVE_MODE_CFG2", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_STATUS, "PCS_XAUI_STATUS", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_STATUS2, "PCS_XAUI_STATUS2", &value);
 
-                //10G Serdes output buffer
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_32_SD10G65_OB_SD10G65_OB_CFG0, "SD10G65_OB_CFG0", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_32_SD10G65_OB_SD10G65_OB_CFG1, "SD10G65_OB_CFG1", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_32_SD10G65_OB_SD10G65_OB_CFG2, "SD10G65_OB_CFG2", &value);
+        CSR_RD(port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_INT, &value);
+        CSR_WARM_WR(port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_INT, value & 0xffff);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_INT, "PCS_XAUI_INT", &value);
+        CSR_RD(port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_INT2, &value);
+        CSR_WARM_WR(port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_INT2, value & 0x3ff);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_INT2, "PCS_XAUI_INT2", &value);
 
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_STATUS_PCS_XAUI_RX_SEQ_REC_STATUS, "PCS_XAUI_RX_SEQ_REC_STATUS", &value);
+        CSR_WARM_WR(port_no, VTSS_PCS_XAUI_PCS_XAUI_ERR_COUNTERS_PCS_XAUI_RX_ALIGN_ERR_CNT, 0x0);
+        CSR_WARM_WR(port_no, VTSS_PCS_XAUI_PCS_XAUI_ERR_COUNTERS_PCS_XAUI_XGMII_ERR_CNT, 0x0);
+        CSR_WARM_WR(port_no, VTSS_PCS_XAUI_PCS_XAUI_ERR_COUNTERS_PCS_XAUI_RX_FIFO_OF_ERR_L0_CNT_STATUS, 0x0);
+        CSR_WARM_WR(port_no, VTSS_PCS_XAUI_PCS_XAUI_ERR_COUNTERS_PCS_XAUI_RX_FIFO_OF_ERR_L0_CNT_STATUS, 0x0);
+        CSR_WARM_WR(port_no, VTSS_PCS_XAUI_PCS_XAUI_ERR_COUNTERS_PCS_XAUI_RX_FIFO_UF_ERR_L1_CNT_STATUS, 0x0);
+        CSR_WARM_WR(port_no, VTSS_PCS_XAUI_PCS_XAUI_ERR_COUNTERS_PCS_XAUI_RX_FIFO_D_ERR_L2_CNT_STATUS, 0x0);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_ERR_COUNTERS_PCS_XAUI_RX_ALIGN_ERR_CNT, "PCS_XAUI_RX_ALIGN_ERR_CNT", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_ERR_COUNTERS_PCS_XAUI_XGMII_ERR_CNT, "PCS_XAUI_XGMII_ERR_CNT", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_ERR_COUNTERS_PCS_XAUI_RX_FIFO_OF_ERR_L0_CNT_STATUS, "PCS_XAUI_RX_FIFO_OF_ERR_L0_CNT_STATUS", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_ERR_COUNTERS_PCS_XAUI_RX_FIFO_OF_ERR_L0_CNT_STATUS, "PCS_XAUI_RX_FIFO_OF_ERR_L0_CNT_STATUS", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_ERR_COUNTERS_PCS_XAUI_RX_FIFO_UF_ERR_L1_CNT_STATUS, "PCS_XAUI_RX_FIFO_UF_ERR_L1_CNT_STATUS", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_ERR_COUNTERS_PCS_XAUI_RX_FIFO_D_ERR_L2_CNT_STATUS, "PCS_XAUI_RX_FIFO_D_ERR_L2_CNT_STATUS", &value);
+        CSR_WARM_WR(port_no, VTSS_PCS_XAUI_PCS_XAUI_ERR_COUNTERS_PCS_XAUI_RX_FIFO_CG_ERR_L3_CNT_STATUS, 0x0);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_PCS_XAUI_PCS_XAUI_ERR_COUNTERS_PCS_XAUI_RX_FIFO_CG_ERR_L3_CNT_STATUS, "PCS_XAUI_RX_FIFO_CG_ERR_L3_CNT_STATUS", &value);
 
+        // LCPLLs
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_HOST_PLL5G_H_PLL5G_H_PLL5G_STATUS0, "HOST LCPLL status0", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_HOST_PLL5G_H_PLL5G_H_PLL5G_STATUS1A, "HOST LCPLL status1A", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_HOST_PLL5G_H_PLL5G_H_PLL5G_STATUS1B, "HOST LCPLL status1B", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_LINE_PLL5G_L_PLL5G_L_PLL5G_STATUS0, "LINE LCPLL status0", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_LINE_PLL5G_L_PLL5G_L_PLL5G_STATUS1A, "LINE LCPLL status1A", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_LINE_PLL5G_L_PLL5G_L_PLL5G_STATUS1B, "LINE LCPLL status1B", &value);
 
-                //XAUI INPUT
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_IB_CFG0B, "SERDES6G_IB_CFG0B", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_IB_CFG1B, "SERDES6G_IB_CFG1B", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_IB_CFG3A, "SERDES6G_IB_CFG3A", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_IB_CFG3B, "SERDES6G_IB_CFG3B", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_IB_CFG4A, "SERDES6G_IB_CFG4A", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_IB_CFG4B, "SERDES6G_IB_CFG4B", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_IB_CFG5A, "SERDES6G_IB_CFG5A", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_IB_CFG5B, "SERDES6G_IB_CFG5B", &value);
-                
-                //XAUI OUTPUT
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_OB_CFG0A, "SERDES6G_OB_CFG0A", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_OB_CFG0B, "SERDES6G_OB_CFG0B", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_OB_CFG1, "SERDES6G_OB_CFG1", &value);
+        // RCPLLs
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_RCPLL_SD10G65_RX_RCPLL_STAT0, "RX_RCPLL_STAT0", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_32_SD10G65_RX_RCPLL_SD10G65_RX_RCPLL_STAT1, "RX_RCPLL_STAT1", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_RCPLL_SD10G65_TX_RCPLL_STAT0, "TX_RCPLL_STAT0", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_RCPLL_SD10G65_TX_RCPLL_STAT1, "TX_RCPLL_STAT1", &value);
 
-                //XAUI MISC
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_SER_CFG, "SERDES6G_SER_CFG", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_COMMON_CFGA, "SERDES6G_COMMON_CFGA", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_COMMON_CFGB, "SERDES6G_COMMON_CFGB", &value);
+        // MISC PMA
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_DATAPATH_CONTROL_DATAPATH_MODE, "DATAPATH_MODE", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_SD10G65_SYNC_CTRL_SYNC_CTRL_CFG, "SYNC_CTRL_CFG", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_SD10G65_SYNC_CTRL_SYNC_CTRL_STAT, "SYNC_CTRL_STAT", &value);
 
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS0(0), "SERDES6G_IB_STATUS0_LANE0", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS1A(0), "SERDES6G_IB_STATUS1A_LANE0", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS1B(0), "SERDES6G_IB_STATUS1B_LANE0", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_ACJTAG_STATUS(0), "SERDES6G_ACJTAG_STATUS_LANE0", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_PLL_STATUS(0), "SERDES6G_PLL_STATUS_LANE0", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_REVIDA(0), "SERDES6G_REVIDA", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_REVIDB(0), "SERDES6G_REVIDB", &value);
+        //APC REGISTERS
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_L_CTRL), "APC_EQZ_L_CTRL", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_L_PAR_CFG), "APC_EQZ_L_PAR_CFG", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_C_CTRL), "APC_EQZ_C_CTRL", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_C_PAR_CFG), "APC_EQZ_C_PAR_CFG", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_AGC_CTRL), "APC_EQZ_AGC_CTRL", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_AGC_PAR_CFG), "APC_EQZ_AGC_PAR_CFG", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_OFFS_CTRL), "APC_EQZ_OFFS_CTRL", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_OFFS_PAR_CFG), "APC_EQZ_OFFS_PAR_CFG", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_LD_CTRL), "APC_EQZ_LD_CTRL", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_CTRL_STATUS), "APC_EQZ_CTRL_STATUS", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_GAIN_CTRL_CFG), "APC_EQZ_GAIN_CTRL_CFG", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_DFE1_CTRL), "APC_DFE1_CTRL", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_DFE1_PAR_CFG), "APC_DFE1_PAR_CFG", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_DFE2_CTRL), "APC_DFE2_CTRL", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_DFE2_PAR_CFG), "APC_DFE2_PAR_CFG", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_DFE3_CTRL), "APC_DFE3_CTRL", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_DFE3_PAR_CFG), "APC_DFE3_PAR_CFG", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_DFE4_CTRL), "APC_DFE4_CTRL", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_DFE4_PAR_CFG), "APC_DFE4_PAR_CFG", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VEN_REV(rev_a, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0), "APC_COMMON_CFG0", &value);
 
+        //10G Serdes output buffer
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_32_SD10G65_OB_SD10G65_OB_CFG0, "SD10G65_OB_CFG0", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_32_SD10G65_OB_SD10G65_OB_CFG1, "SD10G65_OB_CFG1", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_32_SD10G65_OB_SD10G65_OB_CFG2, "SD10G65_OB_CFG2", &value);
 
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS0(1), "SERDES6G_IB_STATUS0_LANE1", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS1A(1), "SERDES6G_IB_STATUS1A_LANE1", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS1B(1), "SERDES6G_IB_STATUS1B_LANE1", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_ACJTAG_STATUS(1), "SERDES6G_ACJTAG_STATUS_LANE1", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_PLL_STATUS(1), "SERDES6G_PLL_STATUS_LANE1", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_REVIDA(1), "SERDES6G_REVIDA", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_REVIDB(1), "SERDES6G_REVIDB", &value);
+        //XAUI INPUT
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_IB_CFG0B, "SERDES6G_IB_CFG0B", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_IB_CFG1B, "SERDES6G_IB_CFG1B", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_IB_CFG3A, "SERDES6G_IB_CFG3A", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_IB_CFG3B, "SERDES6G_IB_CFG3B", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_IB_CFG4A, "SERDES6G_IB_CFG4A", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_IB_CFG4B, "SERDES6G_IB_CFG4B", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_IB_CFG5A, "SERDES6G_IB_CFG5A", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_IB_CFG5B, "SERDES6G_IB_CFG5B", &value);
 
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS0(2), "SERDES6G_IB_STATUS0_LANE2", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS1A(2), "SERDES6G_IB_STATUS1A_LANE2", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS1B(2), "SERDES6G_IB_STATUS1B_LANE2", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_ACJTAG_STATUS(2), "SERDES6G_ACJTAG_STATUS_LANE2", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_PLL_STATUS(2), "SERDES6G_PLL_STATUS_LANE2", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_REVIDA(2), "SERDES6G_REVIDA", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_REVIDB(2), "SERDES6G_REVIDB", &value);
+        //XAUI OUTPUT
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_OB_CFG0A, "SERDES6G_OB_CFG0A", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_OB_CFG0B, "SERDES6G_OB_CFG0B", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_OB_CFG1, "SERDES6G_OB_CFG1", &value);
 
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS0(3), "SERDES6G_IB_STATUS0_LANE3", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS1A(3), "SERDES6G_IB_STATUS1A_LANE3", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS1B(3), "SERDES6G_IB_STATUS1B_LANE3", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_ACJTAG_STATUS(3), "SERDES6G_ACJTAG_STATUS_LANE3", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_PLL_STATUS(3), "SERDES6G_PLL_STATUS_LANE3", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_REVIDA(3), "SERDES6G_REVIDA", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_REVIDB(3), "SERDES6G_REVIDB", &value);
+        //XAUI MISC
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_SER_CFG, "SERDES6G_SER_CFG", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_COMMON_CFGA, "SERDES6G_COMMON_CFGA", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_CFG_SERDES6G_COMMON_CFGB, "SERDES6G_COMMON_CFGB", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_MACRO_CTRL_STATUS_MACRO_CTRL_STAT, "SERDES6G_MACRO_CTRL_STAT", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_MACRO_CTRL_STATUS_MACRO_CTRL_SIGDRV_STAT, "SERDES6G_MACRO_CTRL_SIGDRV_STAT", &value);
 
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS0(0), "SERDES6G_IB_STATUS0_LANE0", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS1A(0), "SERDES6G_IB_STATUS1A_LANE0", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS1B(0), "SERDES6G_IB_STATUS1B_LANE0", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_ACJTAG_STATUS(0), "SERDES6G_ACJTAG_STATUS_LANE0", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_PLL_STATUS(0), "SERDES6G_PLL_STATUS_LANE0", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_REVIDA(0), "SERDES6G_REVIDA", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_REVIDB(0), "SERDES6G_REVIDB", &value);
 
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS0(1), "SERDES6G_IB_STATUS0_LANE1", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS1A(1), "SERDES6G_IB_STATUS1A_LANE1", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS1B(1), "SERDES6G_IB_STATUS1B_LANE1", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_ACJTAG_STATUS(1), "SERDES6G_ACJTAG_STATUS_LANE1", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_PLL_STATUS(1), "SERDES6G_PLL_STATUS_LANE1", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_REVIDA(1), "SERDES6G_REVIDA", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_REVIDB(1), "SERDES6G_REVIDB", &value);
 
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Tx_Sequencing_Error_Count_PCS_Tx_Sequencing_Error_Count, "PCS_Tx_Sequencing_Error_Count", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Rx_Sequencing_Error_Count_PCS_Rx_Sequencing_Error_Count, "PCS_Rx_Sequencing_Error_Count", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Tx_Block_Encode_Error_Count_PCS_Tx_Block_Encode_Error_Count, "PCS_Tx_Block_Encode_Error_Count", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Rx_Block_Decode_Error_Count_PCS_Rx_Block_Decode_Error_Count, "PCS_Rx_Block_Encode_Error_Count", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Tx_Char_Encode_Error_Count_PCS_Tx_Char_Encode_Error_Count, "PCS_Tx_Char_Encode_Error_Count", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Rx_Char_Decode_Error_Count_PCS_Rx_Char_Decode_Error_Count, "PCS_Rx_Char_Encode_Error_Count", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS0(2), "SERDES6G_IB_STATUS0_LANE2", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS1A(2), "SERDES6G_IB_STATUS1A_LANE2", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS1B(2), "SERDES6G_IB_STATUS1B_LANE2", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_ACJTAG_STATUS(2), "SERDES6G_ACJTAG_STATUS_LANE2", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_PLL_STATUS(2), "SERDES6G_PLL_STATUS_LANE2", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_REVIDA(2), "SERDES6G_REVIDA", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_REVIDB(2), "SERDES6G_REVIDB", &value);
 
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_GLOBAL_Temp_Monitor_Temp_Mon_Regs, "Temp_Mon_Regs", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_L_CTRL, "SD10G65_APC_APC_EQZ_L_CTRL", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_L_TIMER_CFG, "SD10G65_APC_APC_EQZ_L_TIMER_CFG", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS0(3), "SERDES6G_IB_STATUS0_LANE3", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS1A(3), "SERDES6G_IB_STATUS1A_LANE3", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_IB_STATUS1B(3), "SERDES6G_IB_STATUS1B_LANE3", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_ACJTAG_STATUS(3), "SERDES6G_ACJTAG_STATUS_LANE3", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_PLL_STATUS(3), "SERDES6G_PLL_STATUS_LANE3", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_REVIDA(3), "SERDES6G_REVIDA", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV4_SERDES6G_ANA_STATUS_SERDES6G_REVIDB(3), "SERDES6G_REVIDB", &value);
 
-                /* Enable MON_CFG */
-                CSR_COLD_WRM(port_no,VTSS_FIFO_BIST_MON_CFG_MON_CFG,
-                        VTSS_F_FIFO_BIST_MON_CFG_MON_CFG_enable,
-                        VTSS_F_FIFO_BIST_MON_CFG_MON_CFG_enable);
-                /* Update counters */
-                CSR_COLD_WRM(port_no,VTSS_FIFO_BIST_UPDATE_UPDATE,
-                        VTSS_F_FIFO_BIST_UPDATE_UPDATE_cntr_update,
-                        VTSS_F_FIFO_BIST_UPDATE_UPDATE_cntr_update);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Tx_Sequencing_Error_Count_PCS_Tx_Sequencing_Error_Count, "PCS_Tx_Sequencing_Error_Count", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Rx_Sequencing_Error_Count_PCS_Rx_Sequencing_Error_Count, "PCS_Rx_Sequencing_Error_Count", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Tx_Block_Encode_Error_Count_PCS_Tx_Block_Encode_Error_Count, "PCS_Tx_Block_Encode_Error_Count", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Rx_Block_Decode_Error_Count_PCS_Rx_Block_Decode_Error_Count, "PCS_Rx_Block_Encode_Error_Count", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Tx_Char_Encode_Error_Count_PCS_Tx_Char_Encode_Error_Count, "PCS_Tx_Char_Encode_Error_Count", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_PCS_PCS_Rx_Char_Decode_Error_Count_PCS_Rx_Char_Decode_Error_Count, "PCS_Rx_Char_Encode_Error_Count", &value);
 
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_Datapath_Control_Datapath_Control, "Datapath_Control", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_GOODCRC_MON_GOOD_LSW, "MON_GOOD_LSW", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_GOODCRC_MON_GOOD_MSW, "MON_GOOD_MSW", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_BADCRC_MON_BAD_LSW, "MON_BAD_LSW", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_BADCRC_MON_BAD_MSW, "MON_BAD_MSW", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_FRAG_MON_FRAG_LSW, "MON_FRAG_LSW", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_FRAG_MON_FRAG_MSW, "MON_FRAG_MSW", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_LFAULT_MON_LFAULT_LSW, "MON_LFAULT_LSW", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_LFAULT_MON_LFAULT_MSW, "MON_LFAULT_MSW", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_BER_MON_BER_LSW, "MON_BER_LSW", &value);
-                venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_BER_MON_BER_MSW, "MON_BER_MSW", &value);
-                }
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_GLOBAL_Temp_Monitor_Temp_Mon_Regs, "Temp_Mon_Regs", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_L_CTRL, "SD10G65_APC_APC_EQZ_L_CTRL", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_L_TIMER_CFG, "SD10G65_APC_APC_EQZ_L_TIMER_CFG", &value);
+
+        /* Enable MON_CFG */
+        CSR_COLD_WRM(port_no,VTSS_FIFO_BIST_MON_CFG_MON_CFG,
+                VTSS_F_FIFO_BIST_MON_CFG_MON_CFG_enable,
+                VTSS_F_FIFO_BIST_MON_CFG_MON_CFG_enable);
+        /* Update counters */
+        CSR_COLD_WRM(port_no,VTSS_FIFO_BIST_UPDATE_UPDATE,
+                VTSS_F_FIFO_BIST_UPDATE_UPDATE_cntr_update,
+                VTSS_F_FIFO_BIST_UPDATE_UPDATE_cntr_update);
+
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_Datapath_Control_Datapath_Control, "Datapath_Control", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_GOODCRC_MON_GOOD_LSW, "MON_GOOD_LSW", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_GOODCRC_MON_GOOD_MSW, "MON_GOOD_MSW", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_BADCRC_MON_BAD_LSW, "MON_BAD_LSW", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_BADCRC_MON_BAD_MSW, "MON_BAD_MSW", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_FRAG_MON_FRAG_LSW, "MON_FRAG_LSW", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_FRAG_MON_FRAG_MSW, "MON_FRAG_MSW", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_LFAULT_MON_LFAULT_LSW, "MON_LFAULT_LSW", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_LFAULT_MON_LFAULT_MSW, "MON_LFAULT_MSW", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_BER_MON_BER_LSW, "MON_BER_LSW", &value);
+        venice_deb_pr_reg(vtss_state, pr, port_no, VTSS_FIFO_BIST_MON_BER_MON_BER_MSW, "MON_BER_MSW", &value);
+    }
+
     return (VTSS_RC_OK);
 }
 
@@ -7042,7 +7163,7 @@ static vtss_rc phy_10g_f2df_conf_set(struct vtss_state_s *vtss_state,
         //IN CASE OF VENICE REV C
         //In case of WarmStart if the serdes setup is already done, no need to setup AGAIN. 
         CSR_RD(port_no,VENICE_REV_C_PORT_SERDES_SETUP_STATUS, &value);
-        value &= VENICE_REV_C_PORT_SERDES_SETUP_STATUS_BIT;
+        value &= VENICE_REV_C_PORT_F2DF_SETUP_STATUS_BIT;
         if(value){
             VTSS_I("F2DF setup not executed during to warmstart\n");
             return VTSS_RC_OK;
@@ -7296,10 +7417,22 @@ static vtss_rc phy_10g_srefclk_set_internal(struct vtss_state_s *vtss_state,
 {
     vtss_port_no_t base_port_no = PHY_BASE_PORT(port_no);
     BOOL rev_a = venice_rev_a(vtss_state, port_no);
+
     /* Port setup */
     if (srefclk->enable) {
         //Configure F2DF Block
+        VTSS_I("SREFCLK ENABLE, port_no %u frequency %u\n", port_no, srefclk->freq);
+        /* clearing the serdes status bit so that F2DF settings can be applied again */
+        CSR_COLD_WRM(port_no,VENICE_REV_C_PORT_SERDES_SETUP_STATUS,
+                0,
+                VENICE_REV_C_PORT_F2DF_SETUP_STATUS_BIT);
+
         VTSS_RC(phy_10g_f2df_conf_set(vtss_state, port_no));
+
+        /* F2DF setup complete, set the status bit to 1 so that it will not be executed again during warm-start */
+        CSR_COLD_WRM(port_no,VENICE_REV_C_PORT_SERDES_SETUP_STATUS,
+                VENICE_REV_C_PORT_F2DF_SETUP_STATUS_BIT,
+                VENICE_REV_C_PORT_F2DF_SETUP_STATUS_BIT);
 
 
         VTSS_D("Enable srefclk for iport %d", port_no);
@@ -7311,9 +7444,22 @@ static vtss_rc phy_10g_srefclk_set_internal(struct vtss_state_s *vtss_state,
                     VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1_SYNTH_FREQ_MULT(
                         rx_tx_synth_freq_mult_l3[phy_10g_rx_tx_reg_mode_idx(vtss_state, port_no)]),
                     VTSS_M_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1_SYNTH_FREQ_MULT);
+
+            CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1_SYNTH_FREQM_1(
+                        rx_tx_synth_freqm_1_norm_l3[phy_10g_rx_tx_reg_mode_idx(vtss_state, port_no)]),
+                    VTSS_M_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1_SYNTH_FREQM_1);
+
+            CSR_WARM_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3,
+                    rx_tx_synth_freqm_0_norm_l3[phy_10g_rx_tx_reg_mode_idx(vtss_state, port_no)]);
+
+
+            CSR_WARM_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4,
+                        rx_tx_synth_freqn_0_norm_l3[phy_10g_rx_tx_reg_mode_idx(vtss_state, port_no)]);
+
         }
 
-        CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_SD10G65_SYNC_CTRL_SYNC_CTRL_CFG,
+        CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_SD10G65_SYNC_CTRL_SYNC_CTRL_CFG,
                      VTSS_F_VENICE_DEV1_SD10G65_SYNC_CTRL_SYNC_CTRL_CFG_LANE_SYNC_SRC(2),
                      VTSS_M_VENICE_DEV1_SD10G65_SYNC_CTRL_SYNC_CTRL_CFG_LANE_SYNC_SRC);
         /* resynchronize the F2FD block */
@@ -7337,7 +7483,7 @@ static vtss_rc phy_10g_srefclk_set_internal(struct vtss_state_s *vtss_state,
     } else {
         
         VTSS_D("Disable srefclk for iport %d", port_no);
-        CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_SD10G65_SYNC_CTRL_SYNC_CTRL_CFG,
+        CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_SD10G65_SYNC_CTRL_SYNC_CTRL_CFG,
                 VTSS_F_VENICE_DEV1_SD10G65_SYNC_CTRL_SYNC_CTRL_CFG_LANE_SYNC_SRC(3),
                 VTSS_M_VENICE_DEV1_SD10G65_SYNC_CTRL_SYNC_CTRL_CFG_LANE_SYNC_SRC);
 
@@ -7346,9 +7492,20 @@ static vtss_rc phy_10g_srefclk_set_internal(struct vtss_state_s *vtss_state,
                     VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1_SYNTH_FREQ_MULT(
                         rx_tx_synth_freq_mult_norm[phy_10g_rx_tx_reg_mode_idx(vtss_state, port_no)]),
                     VTSS_M_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1_SYNTH_FREQ_MULT);
+
+            CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1_SYNTH_FREQM_1(
+                        rx_tx_synth_freqm_1_norm[phy_10g_rx_tx_reg_mode_idx(vtss_state, port_no)]),
+                    VTSS_M_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG1_SYNTH_FREQM_1);
+
+            CSR_WARM_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG3,
+                        rx_tx_synth_freqm_0_norm[phy_10g_rx_tx_reg_mode_idx(vtss_state, port_no)]);
+
+	    CSR_WARM_WR(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG4,
+                      rx_tx_synth_freqn_0_norm[phy_10g_rx_tx_reg_mode_idx(vtss_state, port_no)]);
         }
 
-        CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG0,
+        CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG0,
                 0,
                 VTSS_F_VENICE_DEV1_32_SD10G65_TX_SYNTH_SD10G65_TX_SYNTH_CFG0_SYNTH_LS_ENA);
      }
@@ -9112,6 +9269,7 @@ static vtss_rc venice_c_1588_fifo_reset(vtss_state_t *vtss_state,
                                         const vtss_port_no_t port_no, 
                                         const vtss_phy_10g_fifo_sync_t *conf)
 {
+    VTSS_I("venice_c_1588_fifo_reset port_no %u", port_no);
     VTSS_I("Set Bypass\n");
     VTSS_RC(vtss_phy_ts_bypass_set(vtss_state, port_no, TRUE, TRUE));
 
@@ -9139,7 +9297,7 @@ static vtss_rc venice_c_1588_fifo_reset(vtss_state_t *vtss_state,
 }
 static vtss_rc venice_a_1588_fifo_reset_1g(vtss_state_t *vtss_state, const vtss_port_no_t port_no)
 {
-    VTSS_I("Venice A 1G mode workaround\n");
+    VTSS_I("Venice A 1G mode 1588 OOS workaround port_no%u\n", port_no);
 
     VTSS_I("Set 1588 bypass\n");
     VTSS_RC(vtss_phy_ts_bypass_set(vtss_state, port_no, TRUE, TRUE));
@@ -9167,7 +9325,7 @@ static vtss_rc venice_a_1588_fifo_reset(vtss_state_t *vtss_state,
                                         const vtss_port_no_t port_no,
                                         const vtss_phy_10g_fifo_sync_t *conf)
 {
-    VTSS_I("venice a workaround\n");
+    VTSS_I("Venice A 10G 1588 OOS workaround port_no %u\n", port_no);
 
     VTSS_I("1. Tx XFI Squelch set\n");
     CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_OB_SD10G65_OB_CFG0,
@@ -9364,6 +9522,231 @@ static vtss_rc venice_phy_10g_event_poll(vtss_state_t  *vtss_state,
     return VTSS_RC_OK;
 }
 
+static vtss_rc venice_phy_10g_apc_restart(vtss_state_t  *vtss_state,
+        const vtss_port_no_t port_no,
+        const BOOL is_host)
+{
+
+    u32 value = 0;
+    BOOL rev_a =  venice_rev_a(vtss_state, port_no);
+
+    if(rev_a) {
+        VTSS_E("APC restart not supported on Rev. A \n");
+        return VTSS_RC_ERROR;
+    } else {
+        if (is_host == TRUE) {
+            // Host Side APC Restart
+            VTSS_E("No Host side APC restart for Venice 10G PHY \n");
+        } else {
+            // Line side APC Restart
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0,
+                    0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0_SKIP_CAL);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0_RESET_APC,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0_RESET_APC);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0_APC_DIRECT_ENA,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0_APC_DIRECT_ENA);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0,
+                    0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0_SKIP_OBSERVE_INIT);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0,
+                    0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0_SKIP_OFFSET_INIT);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0,
+                    0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0_SKIP_THRESHOLD_INIT);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0,
+                    0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0_SKIP_DFE_BUFFER_INIT);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0,
+                    0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0_SKIP_OBSERVE_CAL);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0,
+                    0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0_SKIP_OFFSET_CAL);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0_SKIP_THRESHOLD_CAL,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0_SKIP_THRESHOLD_CAL);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0,
+                    0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0_SKIP_DFE_BUFFER_CAL);
+
+            CSR_WARM_WRM(port_no, VEN_REV(rev_a,VTSS_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_COMMON_CFG),
+                    0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_EQZ_COMMON_CFG_EQZ_GAIN_AUTO_RESTART);
+
+            CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0_CPMD_THRES_INIT(31),
+                    VTSS_M_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0_CPMD_THRES_INIT);
+
+            CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0_VSC_THRES_INIT(31),
+                    VTSS_M_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG0_VSC_THRES_INIT);
+
+            CSR_WARM_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG1,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG1_CAL_VSC_OFFSET_TGT,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG1_CAL_VSC_OFFSET_TGT);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_IB_SD10G65_IB_CFG0,
+                    0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_IB_SD10G65_IB_CFG0_IB_DFE_ENA);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0_APC_MODE(1),
+                    VTSS_M_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0_APC_MODE);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0,
+                    0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0_RESET_APC);
+
+            VTSS_MSLEEP(1);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG1,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG1_START_OFFSCAL,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG1_START_OFFSCAL);
+
+            VTSS_MSLEEP(161);
+
+            CSR_RD(port_no,VTSS_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG1,&value);
+            if(!(value & VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG1_OFFSCAL_DONE)) {
+                VTSS_E("Line APC Calibration not done on Line for Port %d\n", port_no);
+                return VTSS_RC_ERROR;
+            }
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG1,
+                    0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_IS_CAL_CFG1_START_OFFSCAL);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_IB_SD10G65_IB_CFG0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_IB_SD10G65_IB_CFG0_IB_DFE_ENA,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_IB_SD10G65_IB_CFG0_IB_DFE_ENA);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0_SKIP_CAL,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0_SKIP_CAL);
+
+            CSR_COLD_WRM(port_no, VTSS_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0,
+                    VTSS_F_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0_APC_MODE(2),
+                    VTSS_M_VENICE_DEV1_32_SD10G65_APC_APC_COMMON_CFG0_APC_MODE);
+        }
+    }
+
+    return VTSS_RC_OK;
+}
+
+static vtss_rc vtss_phy_10g_venice_cross_connect(vtss_state_t *vtss_state,
+                                                 const vtss_port_no_t port_no,
+                                                 const u16 value)
+{
+    VTSS_I("Venice Cross Connect function port_no %u", port_no);
+
+    vtss_port_no_t alt_port = 0;
+    u8 ch_id = vtss_state->phy_10g_state[port_no].channel_id;
+
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+    BOOL skip_ts_reset;
+    vtss_phy_10g_fifo_sync_t venice_fifo_conf;
+#endif
+
+    if (ch_id == 0) {
+        alt_port = port_no - 1;
+    } else {
+        alt_port= port_no + 1;
+    }
+
+#if defined(VTSS_FEATURE_MACSEC)
+    if(vtss_state->macsec_conf[port_no].glb.init.enable){
+        CSR_COLD_WRM(port_no, VTSS_LINE_MAC_CONFIG_MAC_ENA_CFG,
+                0,
+                VTSS_F_LINE_MAC_CONFIG_MAC_ENA_CFG_RX_ENA);
+
+        CSR_COLD_WRM(port_no, VTSS_HOST_MAC_CONFIG_MAC_ENA_CFG,
+                0,
+                VTSS_F_HOST_MAC_CONFIG_MAC_ENA_CFG_RX_ENA);
+
+        CSR_COLD_WRM(port_no, VTSS_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG,
+                VTSS_F_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_BYPASS_ENA,
+                VTSS_F_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_BYPASS_ENA);
+    }
+    if(vtss_state->macsec_conf[alt_port].glb.init.enable){
+        CSR_COLD_WRM(alt_port, VTSS_LINE_MAC_CONFIG_MAC_ENA_CFG,
+                0,
+                VTSS_F_LINE_MAC_CONFIG_MAC_ENA_CFG_RX_ENA);
+
+        CSR_COLD_WRM(alt_port, VTSS_HOST_MAC_CONFIG_MAC_ENA_CFG,
+                0,
+                VTSS_F_HOST_MAC_CONFIG_MAC_ENA_CFG_RX_ENA);
+
+        CSR_COLD_WRM(alt_port, VTSS_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG,
+                VTSS_F_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_BYPASS_ENA,
+                VTSS_F_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_BYPASS_ENA);
+    }
+#endif
+    //Apply cross connect
+    CSR_COLD_WR(port_no, VTSS_VENICE_GLOBAL_Data_Switches_Clock_Control_Data_Switches_Clock_Control, value);
+
+#if defined(VTSS_FEATURE_MACSEC)
+    if(vtss_state->macsec_conf[port_no].glb.init.enable){
+
+        CSR_COLD_WRM(port_no, VTSS_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG,
+                0,
+                VTSS_F_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_BYPASS_ENA);
+
+        CSR_COLD_WRM(port_no, VTSS_LINE_MAC_CONFIG_MAC_ENA_CFG,
+                VTSS_F_LINE_MAC_CONFIG_MAC_ENA_CFG_RX_ENA,
+                VTSS_F_LINE_MAC_CONFIG_MAC_ENA_CFG_RX_ENA);
+
+        CSR_COLD_WRM(port_no, VTSS_HOST_MAC_CONFIG_MAC_ENA_CFG,
+                VTSS_F_HOST_MAC_CONFIG_MAC_ENA_CFG_RX_ENA,
+                VTSS_F_HOST_MAC_CONFIG_MAC_ENA_CFG_RX_ENA);
+    }
+    if(vtss_state->macsec_conf[alt_port].glb.init.enable){
+
+        CSR_COLD_WRM(alt_port, VTSS_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG,
+                0,
+                VTSS_F_MACSEC_INGR_MACSEC_CTL_REGS_MACSEC_ENA_CFG_MACSEC_BYPASS_ENA);
+
+        CSR_COLD_WRM(alt_port, VTSS_LINE_MAC_CONFIG_MAC_ENA_CFG,
+                VTSS_F_LINE_MAC_CONFIG_MAC_ENA_CFG_RX_ENA,
+                VTSS_F_LINE_MAC_CONFIG_MAC_ENA_CFG_RX_ENA);
+
+        CSR_COLD_WRM(alt_port, VTSS_HOST_MAC_CONFIG_MAC_ENA_CFG,
+                VTSS_F_HOST_MAC_CONFIG_MAC_ENA_CFG_RX_ENA,
+                VTSS_F_HOST_MAC_CONFIG_MAC_ENA_CFG_RX_ENA);
+    }
+#endif
+
+    VTSS_RC(phy_10g_venice_block_level_resets(vtss_state, port_no));
+
+#if defined(VTSS_FEATURE_PHY_TIMESTAMP)
+    //Call OOS API for Venice.
+    VTSS_RC(vtss_phy_ts_version_check(vtss_state, port_no, &skip_ts_reset));
+    if(!skip_ts_reset) {
+        /* Bypass set and remove is handled in the vtss_phy_10g_failover_set
+           API so no need to clear bypass here. */
+        VTSS_I("Executing Venice 1588 OOS Algorithm as part of failover setup port_no %u", port_no);
+        venice_fifo_conf.bypass_in_api = FALSE;
+        VTSS_RC(venice_1588_fifo_reset(vtss_state, port_no, &venice_fifo_conf));
+        if(alt_port != port_no)
+            VTSS_RC(venice_1588_fifo_reset(vtss_state, alt_port, &venice_fifo_conf));
+    }
+#endif
+
+    return VTSS_RC_OK;
+}
+
+
 /**
  * \brief Create instance (set up function pointers), this function
  * should be called while creating the instance.
@@ -9397,11 +9780,13 @@ vtss_rc vtss_phy_10g_inst_venice_create(vtss_state_t *vtss_state)
     func->phy_10g_prbs_gen_conf = phy_10g_prbs_gen_conf;
     func->phy_10g_prbs_mon_conf = phy_10g_prbs_mon_conf;
     func->phy_10g_prbs_mon_status_get = phy_10g_prbs_mon_status_get;
+    func->venice_cross_connect = vtss_phy_10g_venice_cross_connect;
 #if defined(VTSS_FEATURE_PHY_TIMESTAMP)
     func->venice_1588_fifo_reset = venice_1588_fifo_reset;
 #endif
     func->venice_phy_10g_event_enable = venice_phy_10g_event_enable;
     func->venice_phy_10g_event_poll = venice_phy_10g_event_poll;
+    func->venice_phy_10g_apc_restart = venice_phy_10g_apc_restart;
 #ifdef VTSS_FEATURE_10GBASE_KR
     func->phy_10g_base_kr_conf_set      = phy_10g_base_kr_conf_set;
     func->venice_phy_10g_base_kr_train_aneg_set = venice_phy_10g_base_kr_train_aneg_set;
