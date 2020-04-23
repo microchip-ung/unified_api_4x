@@ -1,0 +1,57 @@
+#######################################################-*- mode: Makefile -*-
+#
+#
+# Copyright (c) 2002-2016 Microsemi Corporation "Microsemi". All Rights Reserved.
+
+# Unpublished rights reserved under the copyright laws of the United States of
+# America, other countries and international treaties. Permission to use, copy,
+# store and modify, the software and its source code is granted but only in
+# connection with products utilizing the Microsemi switch and PHY products.
+# Permission is also granted for you to integrate into other products, disclose,
+# transmit and distribute the software only in an absolute machine readable format
+# (e.g. HEX file) and only in or with products utilizing the Microsemi switch and
+# PHY products.  The source code of the software may not be disclosed, transmitted
+# or distributed without the prior written permission of Microsemi.
+#
+# This copyright notice must appear in any copy, modification, disclosure,
+# transmission or distribution of the software.  Microsemi retains all ownership,
+# copyright, trade secret and proprietary rights in the software and its source code,
+# including all modifications thereto.
+#
+# THIS SOFTWARE HAS BEEN PROVIDED "AS IS". MICROSEMI HEREBY DISCLAIMS ALL WARRANTIES
+# OF ANY KIND WITH RESPECT TO THE SOFTWARE, WHETHER SUCH WARRANTIES ARE EXPRESS,
+# IMPLIED, STATUTORY OR OTHERWISE INCLUDING, WITHOUT LIMITATION, WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR USE OR PURPOSE AND NON-INFRINGEMENT.
+#
+# ------------------------------------------------------------------------
+#XCC     = /opt/hardhat/devkit/ppc/405/bin/ppc_405-gcc
+XCC     = gcc
+
+DIR_vtss_api := ./base
+DIR_vtss_inc := ./include
+compile_c = $(XCC) -c -o $*.o -MD -DVTSS_OPSYS_LINUX=1 -DVTSS_OPT_PORT_COUNT=4 -DVTSS_CHIP_10G_PHY -DVTSS_FEATURE_PHY_TIMESTAMP -DVTSS_FEATURE_MACSEC -I$(DIR_vtss_inc) $<
+
+OBJECTS_vtss_api_core := vtss_api.o vtss_wis_api.o vtss_phy_10g_api.o
+OBJECTS_vtss_api_core += vtss_util.o vtss_common.o 
+OBJECTS_vtss_api_phy_ms := vtss_macsec_api.o 
+OBJECTS_vtss_api_phy_ts := vtss_phy_ts_api.o vtss_phy_ewis.o 
+OBJECTS_vtss_api_10g := vtss_phy_10g.o vtss_phy_10g_venice.o 
+
+OBJECTS_vtss_api: $(OBJECTS_vtss_api_core) $(OBJECTS_vtss_api_phy_ms) $(OBJECTS_vtss_api_10g) $(OBJECTS_vtss_api_phy_ts)
+	ar -cvq libvtss10g.a $(OBJECTS_vtss_api_core) $(OBJECTS_vtss_api_10g) $(OBJECTS_vtss_api_phy_ms) $(OBJECTS_vtss_api_phy_ts)
+	rm *.o *.d
+
+$(OBJECTS_vtss_api_core): %.o: $(DIR_vtss_api)/ail/%.c
+	$(call compile_c, $@, $<)
+
+$(OBJECTS_vtss_api_10g) : %.o: $(DIR_vtss_api)/phy/phy_10g/%.c
+	$(call compile_c, $@, $<)
+
+$(OBJECTS_vtss_api_phy_ms) : %.o: $(DIR_vtss_api)/phy/macsec/%.c
+	$(call compile_c, $@, $<)
+
+$(OBJECTS_vtss_api_phy_ts) : %.o: $(DIR_vtss_api)/phy/ts/%.c
+	$(call compile_c, $@, $<)
+
+all: $(OBJECTS_vtss_api)
+
